@@ -34,7 +34,16 @@ const bookingSchema = new mongoose.Schema({
     default: 'chua_check_in'
   },
   thoiGianCheckIn: { type: Date }, // Thời gian check-in
-  nguoiCheckIn: { type: mongoose.Schema.Types.ObjectId, ref: 'User' } // Tài xế check-in
+  nguoiCheckIn: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Tài xế check-in
+
+  // Thông tin điểm đón
+  loaiDiemDon: {
+    type: String,
+    enum: ['ben_xe', 'dia_chi_cu_the'],
+    default: 'ben_xe'
+  },
+  diaChiDon: { type: String }, // Địa chỉ cụ thể nếu chọn 'dia_chi_cu_the'
+  ghiChuDiemDon: { type: String } // Ghi chú thêm về điểm đón
 }, {
   timestamps: true
 });
