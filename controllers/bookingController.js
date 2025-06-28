@@ -68,3 +68,71 @@ exports.getMyBookings = async (req, res) => {
         res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
     }
 }
+
+// @desc    Hủy vé
+// @route   DELETE /api/bookings/:id
+// @access  Private
+exports.cancelBooking = async (req, res) => {
+    try {
+        const bookingId = req.params.id;
+
+        // 1. Tìm booking
+        const booking = await Booking.findById(bookingId).populate('tripId');
+
+        if (!booking) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy vé' });
+        }
+
+        // 2. Kiểm tra quyền sở hữu (chỉ user đặt vé hoặc admin mới được hủy)
+        if (booking.userId.toString() !== req.user._id.toString() && req.user.vaiTro !== 'admin') {
+            return res.status(403).json({ success: false, message: 'Không có quyền hủy vé này' });
+        }
+
+        // 3. Kiểm tra thời gian (chỉ được hủy trước 2 giờ khởi hành)
+        const now = new Date();
+        const departureTime = new Date(booking.tripId.thoiGianKhoiHanh);
+        const timeDiff = departureTime.getTime() - now.getTime();
+        const hoursDiff = timeDiff / (1000 * 3600);
+
+        if (hoursDiff < 2 && req.user.vaiTro !== 'admin') {
+            return res.status(400).json({
+                success: false,
+                message: 'Chỉ có thể hủy vé trước 2 giờ khởi hành'
+            });
+        }
+
+        // 4. Kiểm tra trạng thái vé (chỉ hủy được vé chưa thanh toán hoặc admin có thể hủy tất cả)
+        if (booking.trangThaiThanhToan === 'da_thanh_toan' && req.user.vaiTro !== 'admin') {
+            return res.status(400).json({
+                success: false,
+                message: 'Không thể hủy vé đã thanh toán. Vui lòng liên hệ nhà xe.'
+            });
+        }
+
+        // 5. Cập nhật lại ghế trong chuyến đi (trả ghế về trạng thái 'trong')
+        const trip = booking.tripId;
+        booking.danhSachGhe.forEach(tenGhe => {
+            const seat = trip.danhSachGhe.find(s => s.tenGhe === tenGhe);
+            if (seat) {
+                seat.trangThai = 'trong';
+            }
+        });
+
+        await trip.save();
+
+        // 6. Xóa booking
+        await Booking.findByIdAndDelete(bookingId);
+
+        res.status(200).json({
+            success: true,
+            message: 'Hủy vé thành công',
+            data: {
+                cancelledBooking: booking,
+                refundAmount: booking.trangThaiThanhToan === 'da_thanh_toan' ? booking.tongTien : 0
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+    }
+}
