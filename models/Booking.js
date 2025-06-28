@@ -26,7 +26,15 @@ const bookingSchema = new mongoose.Schema({
     type: String,
     enum: ['chua_thanh_toan', 'da_thanh_toan'],
     default: 'chua_thanh_toan'
-  }
+  },
+  qrCode: { type: String }, // Mã QR cho vé
+  trangThaiCheckIn: {
+    type: String,
+    enum: ['chua_check_in', 'da_check_in'],
+    default: 'chua_check_in'
+  },
+  thoiGianCheckIn: { type: Date }, // Thời gian check-in
+  nguoiCheckIn: { type: mongoose.Schema.Types.ObjectId, ref: 'User' } // Tài xế check-in
 }, {
   timestamps: true
 });

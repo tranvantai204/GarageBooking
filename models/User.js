@@ -6,7 +6,7 @@ const userSchema = new mongoose.Schema({
   hoTen: { type: String, required: true },
   soDienThoai: { type: String, required: true, unique: true },
   matKhau: { type: String, required: true, select: false },
-  vaiTro: { type: String, enum: ['user', 'admin'], default: 'user' },
+  vaiTro: { type: String, enum: ['user', 'admin', 'tai_xe'], default: 'user' },
 }, { timestamps: true });
 
 userSchema.pre('save', async function (next) {

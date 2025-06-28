@@ -42,6 +42,17 @@ exports.findTrips = async (req, res) => {
   try {
     const { diemDi, diemDen, ngayDi } = req.query; // Lấy tham số từ URL, ví dụ: /api/trips?diemDi=Hà Nội&diemDen=Sapa
 
+    console.log('🔍 Search params:', { diemDi, diemDen, ngayDi });
+
+    // Nếu không có tham số tìm kiếm, trả về tất cả chuyến đi
+    if (!diemDi && !diemDen && !ngayDi) {
+      console.log('📋 Getting all trips...');
+      const trips = await Trip.find({});
+      console.log(`✅ Found ${trips.length} trips`);
+      return res.status(200).json({ success: true, count: trips.length, data: trips });
+    }
+
+    // Nếu có tham số nhưng không đủ, yêu cầu đầy đủ
     if (!diemDi || !diemDen || !ngayDi) {
       return res.status(400).json({ success: false, message: 'Vui lòng cung cấp đủ điểm đi, điểm đến và ngày đi.' });
     }
@@ -62,10 +73,13 @@ exports.findTrips = async (req, res) => {
       }
     };
 
+    console.log('🔍 Search query:', query);
     const trips = await Trip.find(query);
+    console.log(`✅ Found ${trips.length} matching trips`);
 
     res.status(200).json({ success: true, count: trips.length, data: trips });
   } catch (error) {
+    console.error('❌ Error in findTrips:', error);
     res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
   }
 };

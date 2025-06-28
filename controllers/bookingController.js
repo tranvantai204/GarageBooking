@@ -1,6 +1,7 @@
 // File: controllers/bookingController.js
 const Booking = require('../models/Booking');
 const Trip = require('../models/Trip');
+const QRCode = require('qrcode');
 
 // @desc    Tạo lượt đặt vé mới
 // @route   POST /api/bookings
@@ -42,12 +43,27 @@ exports.createBooking = async (req, res) => {
     await trip.save();
 
     // 6. Tạo một bản ghi booking mới
+    const maVe = `HAPHUONG-${Date.now()}`;
+
+    // 7. Tạo QR code cho vé
+    const qrData = {
+      maVe: maVe,
+      tripId: tripId,
+      userId: req.user._id,
+      danhSachGhe: danhSachGheDat,
+      tongTien: tongTien,
+      timestamp: Date.now()
+    };
+
+    const qrCodeString = await QRCode.toDataURL(JSON.stringify(qrData));
+
     const booking = await Booking.create({
       tripId,
       userId: req.user._id, // Lấy userId từ middleware 'protect' đã gắn vào req
       danhSachGhe: danhSachGheDat,
       tongTien,
-      maVe: `HAPHUONG-${Date.now()}` // Tạo mã vé đơn giản
+      maVe: maVe,
+      qrCode: qrCodeString
     });
 
     res.status(201).json({ success: true, data: booking });
@@ -129,6 +145,122 @@ exports.cancelBooking = async (req, res) => {
             data: {
                 cancelledBooking: booking,
                 refundAmount: booking.trangThaiThanhToan === 'da_thanh_toan' ? booking.tongTien : 0
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+    }
+}
+
+// @desc    Check-in vé bằng QR code
+// @route   POST /api/bookings/checkin
+// @access  Private (chỉ tài xế và admin)
+exports.checkInBooking = async (req, res) => {
+    try {
+        const { qrData } = req.body;
+
+        // 1. Parse QR data
+        let parsedData;
+        try {
+            parsedData = JSON.parse(qrData);
+        } catch (e) {
+            return res.status(400).json({ success: false, message: 'QR code không hợp lệ' });
+        }
+
+        // 2. Tìm booking theo mã vé
+        const booking = await Booking.findOne({ maVe: parsedData.maVe })
+            .populate('tripId', 'diemDi diemDen thoiGianKhoiHanh taiXe')
+            .populate('userId', 'hoTen soDienThoai');
+
+        if (!booking) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy vé' });
+        }
+
+        // 3. Kiểm tra quyền (chỉ tài xế của chuyến đi hoặc admin)
+        if (req.user.vaiTro !== 'admin' &&
+            req.user.vaiTro !== 'tai_xe') {
+            return res.status(403).json({ success: false, message: 'Không có quyền check-in' });
+        }
+
+        // 4. Kiểm tra xem vé đã check-in chưa
+        if (booking.trangThaiCheckIn === 'da_check_in') {
+            return res.status(400).json({
+                success: false,
+                message: 'Vé đã được check-in trước đó',
+                data: {
+                    thoiGianCheckIn: booking.thoiGianCheckIn,
+                    nguoiCheckIn: booking.nguoiCheckIn
+                }
+            });
+        }
+
+        // 5. Kiểm tra thời gian (chỉ được check-in trong ngày khởi hành)
+        const today = new Date();
+        const departureDate = new Date(booking.tripId.thoiGianKhoiHanh);
+
+        if (today.toDateString() !== departureDate.toDateString()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Chỉ có thể check-in trong ngày khởi hành'
+            });
+        }
+
+        // 6. Cập nhật trạng thái check-in
+        booking.trangThaiCheckIn = 'da_check_in';
+        booking.thoiGianCheckIn = new Date();
+        booking.nguoiCheckIn = req.user._id;
+
+        await booking.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Check-in thành công',
+            data: {
+                booking: booking,
+                khachHang: booking.userId,
+                chuyenDi: booking.tripId
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+    }
+}
+
+// @desc    Lấy danh sách hành khách của chuyến đi (cho tài xế)
+// @route   GET /api/bookings/trip/:tripId/passengers
+// @access  Private (chỉ tài xế và admin)
+exports.getTripPassengers = async (req, res) => {
+    try {
+        const { tripId } = req.params;
+
+        // 1. Kiểm tra quyền
+        if (req.user.vaiTro !== 'admin' && req.user.vaiTro !== 'tai_xe') {
+            return res.status(403).json({ success: false, message: 'Không có quyền truy cập' });
+        }
+
+        // 2. Lấy danh sách booking của chuyến đi
+        const bookings = await Booking.find({ tripId })
+            .populate('userId', 'hoTen soDienThoai')
+            .populate('tripId', 'diemDi diemDen thoiGianKhoiHanh taiXe bienSoXe')
+            .sort({ createdAt: 1 });
+
+        // 3. Tính toán thống kê
+        const totalPassengers = bookings.reduce((sum, booking) => sum + booking.danhSachGhe.length, 0);
+        const checkedInPassengers = bookings.filter(b => b.trangThaiCheckIn === 'da_check_in')
+            .reduce((sum, booking) => sum + booking.danhSachGhe.length, 0);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                bookings,
+                statistics: {
+                    totalBookings: bookings.length,
+                    totalPassengers,
+                    checkedInPassengers,
+                    pendingPassengers: totalPassengers - checkedInPassengers
+                }
             }
         });
 
