@@ -23,12 +23,43 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   const { soDienThoai, matKhau } = req.body;
   try {
-    const user = await User.findOne({ soDienThoai }).select('+matKhau');
+    // Lấy user với cả matKhau và vaiTro
+    const user = await User.findOne({ soDienThoai }).select('+matKhau +vaiTro');
+
+    console.log('Found user:', user); // Debug log
+    console.log('User vaiTro:', user?.vaiTro); // Debug log
+
     if (user && (await user.matchPassword(matKhau))) {
-      res.json({ _id: user._id, hoTen: user.hoTen, token: generateToken(user._id) });
+      const response = {
+        _id: user._id,
+        hoTen: user.hoTen,
+        soDienThoai: user.soDienThoai,
+        vaiTro: user.vaiTro || 'user', // Đảm bảo có giá trị mặc định
+        token: generateToken(user._id)
+      };
+
+      console.log('Login response:', response); // Debug log
+      res.json(response);
     } else {
       res.status(401).json({ message: 'Số điện thoại hoặc mật khẩu không chính xác' });
     }
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
+};
+
+// Endpoint để lấy thông tin user hiện tại
+exports.getMe = async (req, res) => {
+  try {
+    // req.user đã được set bởi middleware protect
+    const user = await User.findById(req.user._id);
+    res.json({
+      _id: user._id,
+      hoTen: user.hoTen,
+      soDienThoai: user.soDienThoai,
+      vaiTro: user.vaiTro,
+    });
   } catch (error) {
     res.status(500).json({ message: 'Lỗi server', error: error.message });
   }
