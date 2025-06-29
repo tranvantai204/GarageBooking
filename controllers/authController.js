@@ -83,6 +83,69 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
+// @desc    Create new user
+// @route   POST /api/auth/users
+// @access  Private/Admin
+exports.createUser = async (req, res) => {
+  try {
+    const { hoTen, soDienThoai, email, matKhau, vaiTro, diaChi, cccd, namSinh, gplx, bienSoXe, loaiXe } = req.body;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ soDienThoai });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'Số điện thoại đã được sử dụng'
+      });
+    }
+
+    // Create user
+    const user = await User.create({
+      hoTen,
+      soDienThoai,
+      email: email || '',
+      matKhau: matKhau || '123456', // Default password
+      vaiTro: vaiTro || 'user',
+      diaChi: diaChi || '',
+      cccd: cccd || '',
+      namSinh: namSinh || '',
+      gplx: gplx || '',
+      bienSoXe: bienSoXe || '',
+      loaiXe: loaiXe || '',
+      isActive: true
+    });
+
+    console.log(`✅ Created user: ${user.hoTen} (${user.vaiTro})`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Tạo user thành công',
+      data: {
+        _id: user._id,
+        hoTen: user.hoTen,
+        soDienThoai: user.soDienThoai,
+        email: user.email,
+        vaiTro: user.vaiTro,
+        diaChi: user.diaChi,
+        cccd: user.cccd,
+        namSinh: user.namSinh,
+        gplx: user.gplx,
+        bienSoXe: user.bienSoXe,
+        loaiXe: user.loaiXe,
+        isActive: user.isActive,
+        createdAt: user.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi tạo user',
+      error: error.message
+    });
+  }
+};
+
 // @desc    Update user profile
 // @route   PUT /api/auth/users/:id
 // @access  Private

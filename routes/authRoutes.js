@@ -6,6 +6,7 @@ const {
   login,
   getMe,
   getAllUsers,
+  createUser,
   updateUserProfile
 } = require('../controllers/authController');
 const { protect, isAdmin } = require('../middleware/authMiddleware');
@@ -16,6 +17,7 @@ router.get('/me', protect, getMe);
 
 // User management routes
 router.get('/users', protect, getAllUsers);
+router.post('/users', protect, createUser);
 router.put('/users/:id', protect, updateUserProfile);
 
 module.exports = router;
