@@ -7,7 +7,17 @@ const Trip = require('../models/Trip');
 // @access  Private/Admin
 exports.createTrip = async (req, res) => {
   try {
-    const { diemDi, diemDen, thoiGianKhoiHanh, soGhe, giaVe } = req.body;
+    const {
+      diemDi,
+      diemDen,
+      thoiGianKhoiHanh,
+      soGhe,
+      giaVe,
+      taiXe,
+      taiXeId,
+      bienSoXe,
+      loaiXe
+    } = req.body;
 
     // 1. Tạo danh sách ghế tự động
     const danhSachGhe = [];
@@ -26,6 +36,10 @@ exports.createTrip = async (req, res) => {
       thoiGianKhoiHanh,
       soGhe,
       danhSachGhe, // Thêm danh sách ghế đã tạo
+      taiXe: taiXe || "Chưa cập nhật",
+      taiXeId: taiXeId || null,
+      bienSoXe: bienSoXe || "Chưa cập nhật",
+      loaiXe: loaiXe || "ghe_ngoi"
     });
 
     res.status(201).json({ success: true, data: trip });
@@ -99,5 +113,47 @@ exports.getTripById = async (req, res) => {
     res.status(200).json({ success: true, data: trip });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+  }
+};
+
+// @desc    Update trip information
+// @route   PUT /api/trips/:id
+// @access  Private/Admin
+exports.updateTrip = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const trip = await Trip.findByIdAndUpdate(
+      id,
+      {
+        ...updateData,
+        updatedAt: new Date()
+      },
+      {
+        new: true,
+        runValidators: true
+      }
+    );
+
+    if (!trip) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy chuyến đi'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: trip,
+      message: 'Cập nhật chuyến đi thành công'
+    });
+  } catch (error) {
+    console.error('Error updating trip:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi cập nhật chuyến đi',
+      error: error.message
+    });
   }
 };

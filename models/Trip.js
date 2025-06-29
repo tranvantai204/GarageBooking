@@ -41,9 +41,22 @@ const tripSchema = new mongoose.Schema({
     type: String,
     default: "Chưa cập nhật"
   },
+  taiXeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
   bienSoXe: {
     type: String,
     default: "Chưa cập nhật"
+  },
+  loaiXe: {
+    type: String,
+    default: "ghe_ngoi"
+  },
+  trangThai: {
+    type: String,
+    enum: ['chua_khoi_hanh', 'dang_di', 'da_hoan_thanh', 'da_huy'],
+    default: 'chua_khoi_hanh'
   }
 }, {
   timestamps: true, // Tự động thêm createdAt, updatedAt

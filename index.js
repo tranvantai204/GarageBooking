@@ -12,8 +12,10 @@ connectDB();
 
 // Route files
 const authRoutes = require('./routes/authRoutes');
-const tripRoutes = require('./routes/tripRoutes'); 
-const bookingRoutes = require('./routes/bookingRoutes'); 
+const tripRoutes = require('./routes/tripRoutes');
+const bookingRoutes = require('./routes/bookingRoutes');
+const chatRoutes = require('./routes/chatRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
 
 
 const app = express();
@@ -28,6 +30,11 @@ app.use(cors());
 app.use('/api/auth', authRoutes);
 app.use('/api/trips', tripRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/upload', uploadRoutes);
+
+// Serve static files (uploaded images)
+app.use('/uploads', express.static('uploads'));
 
 app.get('/', (req, res) => {
     res.send('API for Ha Phuong App is running...');

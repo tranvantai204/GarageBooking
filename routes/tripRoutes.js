@@ -2,8 +2,8 @@
 
 const express = require('express');
 const router = express.Router();
-const { createTrip, findTrips, getTripById } = require('../controllers/tripController');
-const { protect, isAdmin } = require('../middleware/authMiddleware'); // <-- THÊM 'isAdmin' VÀO ĐÂY
+const { createTrip, findTrips, getTripById, updateTrip } = require('../controllers/tripController');
+const { protect, isAdmin } = require('../middleware/authMiddleware');
 
 // Định nghĩa các routes
 router.route('/')
@@ -12,6 +12,7 @@ router.route('/')
   .get(findTrips);
 
 router.route('/:id')
-  .get(getTripById);
+  .get(getTripById)
+  .put(protect, isAdmin, updateTrip);
 
 module.exports = router;
