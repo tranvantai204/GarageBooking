@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema({
   soDienThoai: { type: String, required: true, unique: true },
   email: { type: String },
   matKhau: { type: String, required: true, select: false },
-  vaiTro: { type: String, enum: ['user', 'admin', 'tai_xe'], default: 'user' },
+  vaiTro: { type: String, enum: ['user', 'admin', 'driver'], default: 'user' },
   diaChi: { type: String },
 
   // Driver specific fields
