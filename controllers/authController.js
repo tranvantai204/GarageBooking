@@ -64,7 +64,9 @@ exports.login = async (req, res) => {
 // @access  Private/Admin
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find({ isActive: true }).select('-matKhau');
+    // Get all users without isActive filter to debug
+    const users = await User.find({}).select('-matKhau');
+    console.log(`📊 Found ${users.length} users in database`);
 
     res.json({
       success: true,
