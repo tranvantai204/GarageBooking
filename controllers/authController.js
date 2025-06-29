@@ -31,29 +31,25 @@ exports.login = async (req, res) => {
 
     if (user && (await user.matchPassword(matKhau))) {
       const response = {
-        success: true,
-        data: {
-          _id: user._id,
-          hoTen: user.hoTen,
-          soDienThoai: user.soDienThoai,
-          email: user.email,
-          vaiTro: user.vaiTro || 'user',
-          diaChi: user.diaChi,
-          cccd: user.cccd,
-          namSinh: user.namSinh,
-          gplx: user.gplx,
-          bienSoXe: user.bienSoXe,
-          loaiXe: user.loaiXe,
-          avatarUrl: user.avatarUrl,
-          token: generateToken(user._id)
-        }
+        _id: user._id,
+        hoTen: user.hoTen,
+        soDienThoai: user.soDienThoai,
+        email: user.email,
+        vaiTro: user.vaiTro || 'user',
+        diaChi: user.diaChi,
+        cccd: user.cccd,
+        namSinh: user.namSinh,
+        gplx: user.gplx,
+        bienSoXe: user.bienSoXe,
+        loaiXe: user.loaiXe,
+        avatarUrl: user.avatarUrl,
+        token: generateToken(user._id)
       };
 
       console.log('Login response:', response); // Debug log
       res.json(response);
     } else {
       res.status(401).json({
-        success: false,
         message: 'Số điện thoại hoặc mật khẩu không chính xác'
       });
     }
