@@ -49,10 +49,14 @@ exports.getChats = async (req, res) => {
 
 exports.createOrGetChat = async (req, res) => {
   try {
+    console.log('🔄 Create chat request:', req.body);
     const { participantId } = req.body;
     const currentUserId = req.user.id;
+    console.log('👤 Current user ID:', currentUserId);
+    console.log('🎯 Target participant ID:', participantId);
 
     if (!participantId) {
+      console.log('❌ Missing participant ID');
       return res.status(400).json({
         success: false,
         message: 'Participant ID is required'
@@ -60,6 +64,7 @@ exports.createOrGetChat = async (req, res) => {
     }
 
     if (participantId === currentUserId) {
+      console.log('❌ Cannot create chat with yourself');
       return res.status(400).json({
         success: false,
         message: 'Cannot create chat with yourself'
@@ -67,10 +72,15 @@ exports.createOrGetChat = async (req, res) => {
     }
 
     // Get participant info
+    console.log('🔍 Looking up users...');
     const participant = await User.findById(participantId).select('hoTen vaiTro avatarUrl');
     const currentUser = await User.findById(currentUserId).select('hoTen vaiTro avatarUrl');
 
+    console.log('👤 Current user found:', currentUser ? currentUser.hoTen : 'null');
+    console.log('🎯 Participant found:', participant ? participant.hoTen : 'null');
+
     if (!participant || !currentUser) {
+      console.log('❌ User not found');
       return res.status(404).json({
         success: false,
         message: 'User not found'
@@ -78,12 +88,14 @@ exports.createOrGetChat = async (req, res) => {
     }
 
     // Check if chat already exists
+    console.log('🔍 Checking for existing chat...');
     let chat = await Chat.findOne({
       'participants.userId': { $all: [currentUserId, participantId] },
       isActive: true
     });
 
     if (!chat) {
+      console.log('📝 Creating new chat...');
       // Create new chat
       chat = new Chat({
         participants: [
@@ -105,19 +117,25 @@ exports.createOrGetChat = async (req, res) => {
       });
 
       await chat.save();
+      console.log('✅ New chat created with ID:', chat._id);
+    } else {
+      console.log('✅ Found existing chat with ID:', chat._id);
     }
 
+    const responseData = {
+      id: chat._id,
+      participant: {
+        id: participant._id,
+        name: participant.hoTen,
+        role: participant.vaiTro,
+        avatar: participant.avatarUrl
+      }
+    };
+
+    console.log('📤 Sending response:', responseData);
     res.json({
       success: true,
-      data: {
-        id: chat._id,
-        participant: {
-          id: participant._id,
-          name: participant.hoTen,
-          role: participant.vaiTro,
-          avatar: participant.avatarUrl
-        }
-      }
+      data: responseData
     });
   } catch (error) {
     console.error('Create chat error:', error);
