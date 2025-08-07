@@ -157,3 +157,44 @@ exports.updateTrip = async (req, res) => {
     });
   }
 };
+
+// @desc    Delete trip
+// @route   DELETE /api/trips/:id
+// @access  Private/Admin
+exports.deleteTrip = async (req, res) => {
+  try {
+    const trip = await Trip.findById(req.params.id);
+
+    if (!trip) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy chuyến đi'
+      });
+    }
+
+    // Check if there are any bookings for this trip
+    const Booking = require('../models/Booking');
+    const bookingCount = await Booking.countDocuments({ chuyenDi: req.params.id });
+
+    if (bookingCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Không thể xóa chuyến đi này vì đã có ${bookingCount} vé được đặt`
+      });
+    }
+
+    await Trip.findByIdAndDelete(req.params.id);
+
+    res.json({
+      success: true,
+      message: 'Đã xóa chuyến đi thành công'
+    });
+  } catch (error) {
+    console.error('Delete trip error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi server',
+      error: error.message
+    });
+  }
+};
