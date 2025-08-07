@@ -89,10 +89,14 @@ exports.createOrGetChat = async (req, res) => {
 
     // Check if chat already exists
     console.log('🔍 Checking for existing chat...');
+    console.log('🔍 Query: participants.userId $all [', currentUserId, ',', participantId, ']');
+
     let chat = await Chat.findOne({
       'participants.userId': { $all: [currentUserId, participantId] },
       isActive: true
     });
+
+    console.log('🔍 Found existing chat:', chat ? chat._id : 'null');
 
     if (!chat) {
       console.log('📝 Creating new chat...');
