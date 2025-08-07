@@ -59,6 +59,50 @@ exports.login = async (req, res) => {
   }
 };
 
+// @desc    Get current user info
+// @route   GET /api/auth/me
+// @access  Private
+exports.getMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-matKhau');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        _id: user._id,
+        hoTen: user.hoTen,
+        soDienThoai: user.soDienThoai,
+        email: user.email,
+        vaiTro: user.vaiTro,
+        diaChi: user.diaChi,
+        cccd: user.cccd,
+        namSinh: user.namSinh,
+        gplx: user.gplx,
+        bienSoXe: user.bienSoXe,
+        loaiXe: user.loaiXe,
+        avatarUrl: user.avatarUrl,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('Get me error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi server',
+      error: error.message
+    });
+  }
+};
+
 // @desc    Get all users
 // @route   GET /api/auth/users
 // @access  Private/Admin
