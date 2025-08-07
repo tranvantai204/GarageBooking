@@ -5,7 +5,8 @@ const {
   getChats,
   createOrGetChat,
   getMessages,
-  sendMessage
+  sendMessage,
+  getAllChats
 } = require('../controllers/chatController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -18,6 +19,10 @@ router.route('/')
 
 router.route('/create')
   .post(createOrGetChat);
+
+// Debug route - list all chats
+router.route('/debug/all')
+  .get(getAllChats);
 
 router.route('/:chatId/messages')
   .get(getMessages)

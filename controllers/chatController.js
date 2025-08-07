@@ -91,15 +91,28 @@ exports.createOrGetChat = async (req, res) => {
     console.log('🔍 Checking for existing chat...');
     console.log('🔍 Query: participants.userId $all [', currentUserId, ',', participantId, ']');
 
+    // More specific query to ensure exactly 2 participants
     let chat = await Chat.findOne({
-      'participants.userId': { $all: [currentUserId, participantId] },
-      isActive: true
+      $and: [
+        { 'participants.userId': currentUserId },
+        { 'participants.userId': participantId },
+        { 'participants': { $size: 2 } }, // Exactly 2 participants
+        { isActive: true }
+      ]
     });
 
     console.log('🔍 Found existing chat:', chat ? chat._id : 'null');
 
+    if (chat) {
+      console.log('📋 Existing chat participants:', chat.participants.map(p => `${p.name} (${p.userId})`));
+    }
+
     if (!chat) {
       console.log('📝 Creating new chat...');
+      console.log('👥 Participants will be:');
+      console.log('  - User 1:', currentUser.hoTen, '(', currentUserId, ')');
+      console.log('  - User 2:', participant.hoTen, '(', participantId, ')');
+
       // Create new chat
       chat = new Chat({
         participants: [
@@ -122,8 +135,27 @@ exports.createOrGetChat = async (req, res) => {
 
       await chat.save();
       console.log('✅ New chat created with ID:', chat._id);
+      console.log('📋 New chat participants:', chat.participants.map(p => `${p.name} (${p.userId})`));
     } else {
       console.log('✅ Found existing chat with ID:', chat._id);
+      console.log('📋 Existing chat participants:', chat.participants.map(p => `${p.name} (${p.userId})`));
+    }
+
+    // Validate data before sending response
+    if (!chat || !chat._id) {
+      console.log('❌ Chat object is invalid:', chat);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to create/get chat'
+      });
+    }
+
+    if (!participant || !participant._id) {
+      console.log('❌ Participant object is invalid:', participant);
+      return res.status(500).json({
+        success: false,
+        message: 'Participant not found'
+      });
     }
 
     const responseData = {
@@ -147,6 +179,42 @@ exports.createOrGetChat = async (req, res) => {
       success: false,
       message: 'Lỗi server',
       error: error.message
+    });
+  }
+};
+
+// Debug API - List all chats
+exports.getAllChats = async (req, res) => {
+  try {
+    const chats = await Chat.find({});
+
+    console.log('📋 All chats in database:');
+    chats.forEach(chat => {
+      console.log(`  Chat ${chat._id}:`);
+      chat.participants.forEach(p => {
+        console.log(`    - ${p.name} (${p.userId}) [${p.role}]`);
+      });
+    });
+
+    res.json({
+      success: true,
+      count: chats.length,
+      data: chats.map(chat => ({
+        id: chat._id,
+        participants: chat.participants.map(p => ({
+          userId: p.userId,
+          name: p.name,
+          role: p.role
+        })),
+        lastMessage: chat.lastMessage,
+        createdAt: chat.createdAt
+      }))
+    });
+  } catch (error) {
+    console.error('Error getting all chats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
     });
   }
 };
