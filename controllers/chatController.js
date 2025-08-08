@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 exports.getChats = async (req, res) => {
   try {
     const userId = req.user.id;
+    console.log('🔍 Getting chat rooms for user:', userId);
 
     const chats = await Chat.find({
       'participants.userId': userId,
@@ -14,6 +15,8 @@ exports.getChats = async (req, res) => {
     .sort({ updatedAt: -1 })
     .populate('participants.userId', 'hoTen vaiTro avatarUrl')
     .lean();
+
+    console.log(`📊 Found ${chats.length} chats for user ${userId}`);
 
     // Format response
     const formattedChats = chats.map(chat => {
