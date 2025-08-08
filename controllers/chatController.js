@@ -21,7 +21,18 @@ exports.getChats = async (req, res) => {
     // Format response
     const formattedChats = chats.map(chat => {
       const otherParticipant = chat.participants.find(p => p.userId._id.toString() !== userId);
-      const unreadCount = chat.unreadCount?.get(userId) || 0;
+
+      // Handle both Map and Object formats for unreadCount
+      let unreadCount = 0;
+      if (chat.unreadCount) {
+        if (typeof chat.unreadCount.get === 'function') {
+          // It's a Map
+          unreadCount = chat.unreadCount.get(userId) || 0;
+        } else if (typeof chat.unreadCount === 'object') {
+          // It's a plain object
+          unreadCount = chat.unreadCount[userId] || 0;
+        }
+      }
 
       return {
         id: chat._id,
