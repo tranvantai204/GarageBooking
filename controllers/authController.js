@@ -112,6 +112,15 @@ exports.getAllUsers = async (req, res) => {
     const users = await User.find({}).select('-matKhau');
     console.log(`📊 Found ${users.length} users in database`);
 
+    // Debug: Log all users with their IDs
+    console.log('📋 All users in database:');
+    users.forEach(user => {
+      console.log(`  - ${user.hoTen} (ID: ${user._id}) [${user.vaiTro}]`);
+      if (user._id.toString().length !== 24) {
+        console.log(`    ⚠️ WARNING: Invalid ObjectId format!`);
+      }
+    });
+
     res.json({
       success: true,
       count: users.length,
