@@ -1,6 +1,7 @@
 const Chat = require('../models/Chat');
 const Message = require('../models/Message');
 const User = require('../models/User');
+const mongoose = require('mongoose');
 
 exports.getChats = async (req, res) => {
   try {
@@ -63,7 +64,24 @@ exports.createOrGetChat = async (req, res) => {
       });
     }
 
-    if (participantId === currentUserId) {
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(participantId)) {
+      console.log('❌ Invalid participant ID format:', participantId);
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid participant ID format'
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(currentUserId)) {
+      console.log('❌ Invalid current user ID format:', currentUserId);
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID format'
+      });
+    }
+
+    if (participantId.toString() === currentUserId.toString()) {
       console.log('❌ Cannot create chat with yourself');
       return res.status(400).json({
         success: false,
