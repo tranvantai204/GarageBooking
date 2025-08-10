@@ -1,13 +1,7 @@
 // File: routes/chatRoutes.js
 const express = require('express');
 const router = express.Router();
-const {
-  getChats,
-  createOrGetChat,
-  getMessages,
-  sendMessage,
-  getAllChats
-} = require('../controllers/chatController');
+const chatController = require('../controllers/chatController');
 const { protect } = require('../middleware/authMiddleware');
 
 // Apply protect middleware to all routes
@@ -31,3 +25,10 @@ router.route('/:chatId/messages')
 
 router.get('/user/:id/activity-status', require('../controllers/authController').getUserActivityStatus);
 module.exports = router;
+const {
+  getChats,
+  createOrGetChat,
+  getMessages,
+  sendMessage,
+  getAllChats
+} = chatController;
