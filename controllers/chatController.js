@@ -399,3 +399,24 @@ exports.sendMessage = async (req, res) => {
     });
   }
 };
+
+exports.deleteMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user.id;
+    const user = await User.findById(userId);
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ success: false, message: 'Message not found' });
+    }
+    // Only sender or admin can delete
+    if (message.senderId.toString() !== userId && user.vaiTro !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Permission denied' });
+    }
+    await Message.deleteOne({ _id: messageId });
+    res.json({ success: true, message: 'Message deleted' });
+  } catch (error) {
+    console.error('Delete message error:', error);
+    res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+  }
+};

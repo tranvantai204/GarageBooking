@@ -27,5 +27,7 @@ router.route('/debug/all')
 router.route('/:chatId/messages')
   .get(getMessages)
   .post(sendMessage);
+  router.delete('/messages/:id', chatController.deleteMessage);
 
+router.get('/user/:id/activity-status', require('../controllers/authController').getUserActivityStatus);
 module.exports = router;
