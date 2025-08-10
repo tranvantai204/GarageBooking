@@ -6,18 +6,14 @@ const mongoose = require('mongoose');
 exports.getChats = async (req, res) => {
   try {
     const userId = req.user.id;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    console.log('🔍 Getting chat rooms for user:', userId);
 
     const chats = await Chat.find({
       'participants.userId': userId,
       isActive: true
     })
     .sort({ updatedAt: -1 })
-    .skip((page - 1) * limit)
-    .limit(limit)
     .populate('participants.userId', 'hoTen vaiTro avatarUrl')
-    .select('-__v')
     .lean();
 
     console.log(`📊 Found ${chats.length} chats for user ${userId}`);
