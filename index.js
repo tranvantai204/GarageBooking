@@ -83,6 +83,37 @@ io.on('connection', (socket) => {
       console.error('Join error:', error);
     }
   });
+  
+    // Trạng thái tin nhắn: delivered, seen
+    socket.on('message_delivered', (data) => {
+      // data: { chatId, messageId, userId }
+      io.to(data.chatId).emit('message_delivered', data);
+    });
+  
+    socket.on('message_seen', (data) => {
+      // data: { chatId, messageId, userId }
+      io.to(data.chatId).emit('message_seen', data);
+    });
+  
+    // Trạng thái đang soạn tin
+    socket.on('typing_start', (data) => {
+      io.to(data.chatId).emit('typing_start', { userId: socket.userId });
+    });
+    socket.on('typing_stop', (data) => {
+      io.to(data.chatId).emit('typing_stop', { userId: socket.userId });
+    });
+  
+    // Trạng thái online/offline
+    socket.on('join', async (userId) => {
+      // ...existing code...
+      io.emit('user_status_update', { userId, isOnline: true });
+    });
+    socket.on('disconnect', () => {
+      if (socket.userId) {
+        io.emit('user_status_update', { userId: socket.userId, isOnline: false });
+      }
+      console.log('🔌 User disconnected:', socket.id);
+    });
 
   // Handle sending messages
   socket.on('send_message', async (data) => {
