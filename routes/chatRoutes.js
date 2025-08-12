@@ -7,7 +7,8 @@ const {
   createOrGetChat,
   getMessages,
   sendMessage,
-  getAllChats
+  getAllChats,
+  deleteMessage
 } = chatController;
 const { protect } = require('../middleware/authMiddleware');
 
@@ -25,9 +26,9 @@ router.route('/create')
 router.route('/debug/all')
   .get(getAllChats);
 
-router.route('/:chatId/messages')
-  .get(getMessages)
-  .post(sendMessage);
+  router.route('/:chatId/messages')
+    .get(getMessages)
+    .post(sendMessage);
   router.delete('/messages/:id', chatController.deleteMessage);
 
 router.get('/user/:id/activity-status', require('../controllers/authController').getUserActivityStatus);
