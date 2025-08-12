@@ -402,18 +402,38 @@ exports.sendMessage = async (req, res) => {
 
 exports.deleteMessage = async (req, res) => {
   try {
-    const { messageId } = req.params;
+    const { id } = req.params; // Changed from messageId to id to match route
     const userId = req.user.id;
+    
+    console.log('🗑️ Delete message request:', { messageId: id, userId });
+    
     const user = await User.findById(userId);
-    const message = await Message.findById(messageId);
+    const message = await Message.findById(id);
+    
     if (!message) {
+      console.log('❌ Message not found:', id);
       return res.status(404).json({ success: false, message: 'Message not found' });
     }
+    
+    console.log('📝 Message found:', { 
+      messageId: message._id, 
+      senderId: message.senderId, 
+      content: message.content 
+    });
+    
     // Only sender or admin can delete
     if (message.senderId.toString() !== userId && user.vaiTro !== 'admin') {
+      console.log('❌ Permission denied:', { 
+        messageSenderId: message.senderId, 
+        currentUserId: userId, 
+        userRole: user.vaiTro 
+      });
       return res.status(403).json({ success: false, message: 'Permission denied' });
     }
-    await Message.deleteOne({ _id: messageId });
+    
+    await Message.deleteOne({ _id: id });
+    console.log('✅ Message deleted successfully:', id);
+    
     res.json({ success: true, message: 'Message deleted' });
   } catch (error) {
     console.error('Delete message error:', error);
