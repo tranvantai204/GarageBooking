@@ -47,9 +47,10 @@ app.get('/', (req, res) => {
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+    origin: '*',
+    methods: ['GET', 'POST'],
+  },
+  path: '/socket.io',
 });
 
 // Socket.IO connection handling
@@ -213,7 +214,7 @@ io.on('connection', (socket) => {
 
     // ===== Voice Call Signaling =====
     // Caller starts a call to targetUserId
-    socket.on('start_call', (data) => {
+  socket.on('start_call', (data) => {
       try {
         const { targetUserId, channelName, caller } = data || {};
         if (!targetUserId || !channelName) return;
@@ -225,6 +226,8 @@ io.on('connection', (socket) => {
             targetUserId,
           });
           console.log(`📞 Incoming call to ${targetUserId} on channel ${channelName}`);
+      } else {
+        console.log(`⚠️ Target user ${targetUserId} is not connected`);
         }
       } catch (err) {
         console.error('start_call error:', err);
