@@ -49,10 +49,8 @@ router.get('/rtcToken', (req, res) => {
       return res.status(400).json({"error": "channelName is required"});
     }
     
-    let uid = req.query.uid;
-    if (!uid) {
-      uid = 0;
-    }
+  let uidParam = req.query.uid;
+  const uid = parseInt(uidParam, 10) || 0;
     
     const role = RtcRole.PUBLISHER;
     const expireTime = 3600;
