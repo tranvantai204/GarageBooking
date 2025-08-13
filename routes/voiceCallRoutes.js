@@ -5,7 +5,7 @@ const { protect } = require('../middleware/authMiddleware');
 
 // Agora configuration - using environment variables
 const AGORA_APP_ID = process.env.AGORA_APP_ID || 'aec4d4a14d994fb1904ce07a17cd4c2c';
-const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || '';
+const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || '3d183599eb3a42938b2395362dcd2f7b';
 
 // Simple token generation for development
 // In production, use proper Agora token generation
