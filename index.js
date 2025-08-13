@@ -46,8 +46,7 @@ app.get('/', (req, res) => {
 // Create HTTP server and Socket.IO
 const server = http.createServer(app);
 const io = socketIo(server, {
-  cors: {
-    origin: '*',
+  cors: {    origin: '*',
     methods: ['GET', 'POST'],
   },
   path: '/socket.io',
@@ -272,6 +271,19 @@ io.on('connection', (socket) => {
         console.error('decline_call error:', err);
       }
     });
+
+  // When either side ends the call, inform the peer to exit
+  socket.on('end_call', (data) => {
+    try {
+      const { peerUserId, channelName } = data || {};
+      const peerSocketId = connectedUsers.get(peerUserId);
+      if (peerSocketId) {
+        io.to(peerSocketId).emit('call_ended', { channelName });
+      }
+    } catch (err) {
+      console.error('end_call error:', err);
+    }
+  });
 });
 
 const PORT = process.env.PORT || 8080;
