@@ -210,6 +210,65 @@ io.on('connection', (socket) => {
     }
     console.log('🔌 User disconnected:', socket.id);
   });
+
+    // ===== Voice Call Signaling =====
+    // Caller starts a call to targetUserId
+    socket.on('start_call', (data) => {
+      try {
+        const { targetUserId, channelName, caller } = data || {};
+        if (!targetUserId || !channelName) return;
+        const targetSocketId = connectedUsers.get(targetUserId);
+        if (targetSocketId) {
+          io.to(targetSocketId).emit('incoming_call', {
+            channelName,
+            caller,
+            targetUserId,
+          });
+          console.log(`📞 Incoming call to ${targetUserId} on channel ${channelName}`);
+        }
+      } catch (err) {
+        console.error('start_call error:', err);
+      }
+    });
+
+    // Caller cancels before connect
+    socket.on('cancel_call', (data) => {
+      try {
+        const { targetUserId, channelName } = data || {};
+        const targetSocketId = connectedUsers.get(targetUserId);
+        if (targetSocketId) {
+          io.to(targetSocketId).emit('call_cancelled', { channelName });
+        }
+      } catch (err) {
+        console.error('cancel_call error:', err);
+      }
+    });
+
+    // Callee accepts
+    socket.on('accept_call', (data) => {
+      try {
+        const { callerUserId, channelName } = data || {};
+        const callerSocketId = connectedUsers.get(callerUserId);
+        if (callerSocketId) {
+          io.to(callerSocketId).emit('call_accepted', { channelName });
+        }
+      } catch (err) {
+        console.error('accept_call error:', err);
+      }
+    });
+
+    // Callee declines
+    socket.on('decline_call', (data) => {
+      try {
+        const { callerUserId, channelName } = data || {};
+        const callerSocketId = connectedUsers.get(callerUserId);
+        if (callerSocketId) {
+          io.to(callerSocketId).emit('call_declined', { channelName });
+        }
+      } catch (err) {
+        console.error('decline_call error:', err);
+      }
+    });
 });
 
 const PORT = process.env.PORT || 8080;
