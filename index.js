@@ -18,6 +18,7 @@ const tripRoutes = require('./routes/tripRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const voiceCallRoutes = require('./routes/voiceCallRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 // const uploadRoutes = require('./routes/uploadRoutes');
 
 const app = express();
@@ -34,6 +35,7 @@ app.use('/api/trips', tripRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/voice', voiceCallRoutes);
+app.use('/api/notifications', notificationRoutes);
 // app.use('/api/upload', uploadRoutes);
 
 // Serve static files (uploaded images)
