@@ -84,6 +84,26 @@ io.on('connection', (socket) => {
       console.error('Join error:', error);
     }
   });
+
+  // Defensive: re-map on start_call if caller provided
+  socket.on('start_call', (data) => {
+    try {
+      const { targetUserId, channelName, caller } = data || {};
+      if (caller && caller.userId) {
+        connectedUsers.set(caller.userId, socket.id);
+      }
+      if (!targetUserId || !channelName) return;
+      const targetSocketId = connectedUsers.get(targetUserId);
+      if (targetSocketId) {
+        io.to(targetSocketId).emit('incoming_call', { channelName, caller, targetUserId });
+        console.log(`📞 Incoming call to ${targetUserId} on channel ${channelName}`);
+      } else {
+        console.log(`⚠️ Target user ${targetUserId} is not connected`);
+      }
+    } catch (err) {
+      console.error('start_call error:', err);
+    }
+  });
   
     // Trạng thái tin nhắn: delivered, seen
     socket.on('message_delivered', (data) => {
