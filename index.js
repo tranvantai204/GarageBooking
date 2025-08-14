@@ -19,6 +19,10 @@ const bookingRoutes = require('./routes/bookingRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const voiceCallRoutes = require('./routes/voiceCallRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const vehicleRoutes = require('./routes/vehicleRoutes');
+const voucherRoutes = require('./routes/voucherRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const systemRoutes = require('./routes/systemRoutes');
 // const uploadRoutes = require('./routes/uploadRoutes');
 
 const app = express();
@@ -36,6 +40,10 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/voice', voiceCallRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/vehicles', vehicleRoutes);
+app.use('/api/vouchers', voucherRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/system', systemRoutes);
 // app.use('/api/upload', uploadRoutes);
 
 // Serve static files (uploaded images)

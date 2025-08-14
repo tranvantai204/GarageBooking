@@ -23,6 +23,7 @@ const userSchema = new mongoose.Schema({
   gplxImageUrl: { type: String },
 
   isActive: { type: Boolean, default: true },
+  isVip: { type: Boolean, default: false },
 }, { timestamps: true });
 
 userSchema.pre('save', async function (next) {
