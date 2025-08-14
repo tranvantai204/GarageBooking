@@ -73,7 +73,7 @@ const connectedUsers = new Map();
 io.on('connection', (socket) => {
   console.log('🔌 User connected:', socket.id);
 
-  // User joins with their ID
+  // User joins with their ID (single handler)
   socket.on('join', async (userId) => {
     try {
       connectedUsers.set(userId, socket.id);
@@ -90,12 +90,15 @@ io.on('connection', (socket) => {
         socket.join(chat._id.toString());
         console.log(`📱 User ${userId} joined chat room ${chat._id}`);
       });
+
+      // Broadcast online status
+      io.emit('user_status_update', { userId, isOnline: true });
     } catch (error) {
       console.error('Join error:', error);
     }
   });
 
-  // Defensive: re-map on start_call if caller provided
+  // Defensive: re-map on start_call if caller provided (single handler)
   socket.on('start_call', (data) => {
     try {
       const { targetUserId, channelName, caller } = data || {};
@@ -134,17 +137,7 @@ io.on('connection', (socket) => {
       io.to(data.chatId).emit('typing_stop', { userId: socket.userId });
     });
   
-    // Trạng thái online/offline
-    socket.on('join', async (userId) => {
-      // ...existing code...
-      io.emit('user_status_update', { userId, isOnline: true });
-    });
-    socket.on('disconnect', () => {
-      if (socket.userId) {
-        io.emit('user_status_update', { userId: socket.userId, isOnline: false });
-      }
-      console.log('🔌 User disconnected:', socket.id);
-    });
+    // (Removed duplicate join/disconnect handlers)
 
   // Handle sending messages
   socket.on('send_message', async (data) => {
@@ -232,36 +225,18 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Handle disconnect
+  // Handle disconnect (single handler)
   socket.on('disconnect', () => {
     if (socket.userId) {
       connectedUsers.delete(socket.userId);
+      io.emit('user_status_update', { userId: socket.userId, isOnline: false });
       console.log(`👤 User ${socket.userId} disconnected`);
     }
     console.log('🔌 User disconnected:', socket.id);
   });
 
     // ===== Voice Call Signaling =====
-    // Caller starts a call to targetUserId
-  socket.on('start_call', (data) => {
-      try {
-        const { targetUserId, channelName, caller } = data || {};
-        if (!targetUserId || !channelName) return;
-        const targetSocketId = connectedUsers.get(targetUserId);
-        if (targetSocketId) {
-          io.to(targetSocketId).emit('incoming_call', {
-            channelName,
-            caller,
-            targetUserId,
-          });
-          console.log(`📞 Incoming call to ${targetUserId} on channel ${channelName}`);
-      } else {
-        console.log(`⚠️ Target user ${targetUserId} is not connected`);
-        }
-      } catch (err) {
-        console.error('start_call error:', err);
-      }
-    });
+    // (start_call handled above)
 
     // Caller cancels before connect
     socket.on('cancel_call', (data) => {
