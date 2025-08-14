@@ -7,7 +7,7 @@ const QRCode = require('qrcode');
 // @route   POST /api/bookings
 // @access  Private
 exports.createBooking = async (req, res) => {
-  const { tripId, danhSachGheDat } = req.body; // danhSachGheDat là mảng ghế user muốn đặt, ví dụ: ['A1', 'A2']
+  const { tripId, danhSachGheDat, voucherCode, discountAmount, loaiDiemDon, diaChiDon, ghiChuDiemDon, thongTinKhachHang } = req.body; // danhSachGheDat là mảng ghế user muốn đặt
 
   try {
     // 1. Tìm chuyến đi trong DB
@@ -57,14 +57,24 @@ exports.createBooking = async (req, res) => {
 
     const qrCodeString = await QRCode.toDataURL(JSON.stringify(qrData));
 
-    const booking = await Booking.create({
+    const bookingPayload = {
       tripId,
-      userId: req.user._id, // Lấy userId từ middleware 'protect' đã gắn vào req
+      userId: req.user._id,
       danhSachGhe: danhSachGheDat,
-      tongTien,
+      tongTien: Math.max(0, tongTien - (parseInt(discountAmount) || 0)),
       maVe: maVe,
-      qrCode: qrCodeString
-    });
+      qrCode: qrCodeString,
+      loaiDiemDon: loaiDiemDon || 'ben_xe',
+      diaChiDon: diaChiDon,
+      ghiChuDiemDon: ghiChuDiemDon,
+    };
+    if (voucherCode) bookingPayload.voucherCode = voucherCode;
+    if (discountAmount) bookingPayload.discountAmount = parseInt(discountAmount);
+    if (thongTinKhachHang && typeof thongTinKhachHang === 'object') {
+      bookingPayload.thongTinKhachHang = thongTinKhachHang;
+    }
+
+    const booking = await Booking.create(bookingPayload);
 
     res.status(201).json({ success: true, data: booking });
 

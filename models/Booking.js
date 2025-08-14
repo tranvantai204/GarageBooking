@@ -48,5 +48,16 @@ const bookingSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Optional voucher fields
+bookingSchema.add({
+  voucherCode: { type: String },
+  discountAmount: { type: Number, default: 0 },
+  thongTinKhachHang: {
+    hoTen: { type: String },
+    soDienThoai: { type: String },
+    email: { type: String }
+  }
+});
+
 const Booking = mongoose.model('Booking', bookingSchema);
 module.exports = Booking;
