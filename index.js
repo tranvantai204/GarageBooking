@@ -235,6 +235,19 @@ io.on('connection', (socket) => {
     console.log('🔌 User disconnected:', socket.id);
   });
 
+  // ===== Driver live location =====
+  socket.on('driver_location', (data) => {
+    try {
+      // data: { userId, lat, lng, tripId }
+      const { userId, lat, lng, tripId } = data || {};
+      if (!userId || typeof lat !== 'number' || typeof lng !== 'number') return;
+      // Broadcast to admins only for now
+      io.emit('driver_location_update', { userId, lat, lng, tripId, ts: Date.now() });
+    } catch (err) {
+      console.error('driver_location error:', err);
+    }
+  });
+
     // ===== Voice Call Signaling =====
     // (start_call handled above)
 

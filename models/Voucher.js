@@ -7,6 +7,7 @@ const voucherSchema = new mongoose.Schema(
     value: { type: Number, required: true },
     minAmount: { type: Number, default: 0 },
     maxDiscount: { type: Number },
+    perUserLimit: { type: Number, default: 1 }, // 1: mỗi tài khoản 1 lần; >1: dùng nhiều lần
     startAt: { type: Date, required: true },
     endAt: { type: Date, required: true },
     quota: { type: Number, default: 0 },

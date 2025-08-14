@@ -53,6 +53,15 @@ router.post('/validate', protect, async (req, res) => {
   if (v.routes?.length && route && !v.routes.includes(route)) {
     return res.status(400).json({ success: false, message: 'Không áp dụng tuyến này' });
   }
+  // Per-user usage control: nếu perUserLimit = 1 -> mỗi tài khoản chỉ dùng 1 lần
+  // Nếu >1: dùng nhiều lần nhưng vẫn tối đa 1 mã trên 1 vé (mặc định hệ thống đã áp dụng)
+  if (v.perUserLimit && v.perUserLimit > 0) {
+    const Booking = require('../models/Booking');
+    const usedCount = await Booking.countDocuments({ userId: req.user._id, voucherCode: code });
+    if (usedCount >= v.perUserLimit) {
+      return res.status(400).json({ success: false, message: 'Bạn đã dùng mã này đủ số lần cho phép' });
+    }
+  }
   let discount = v.type === 'percent' ? (amount * v.value) / 100 : v.value;
   if (v.maxDiscount) discount = Math.min(discount, v.maxDiscount);
   res.json({ success: true, discount });
