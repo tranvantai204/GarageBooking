@@ -32,9 +32,17 @@ router.delete('/:id', protect, adminOnly, async (req, res) => {
 router.post('/validate', protect, async (req, res) => {
   const { code, amount, route } = req.body || {};
   const v = await Voucher.findOne({ code, active: true });
-  const now = new Date();
-  if (!v || now < v.startAt || now > v.endAt) {
+  if (!v) {
     return res.status(400).json({ success: false, message: 'Voucher không hợp lệ' });
+  }
+  const now = new Date();
+  const start = new Date(v.startAt);
+  const end = new Date(v.endAt);
+  // So sánh theo ngày, bao gồm cả ngày bắt đầu/kết thúc để tránh lệch múi giờ
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+  if (now < start || now > end) {
+    return res.status(400).json({ success: false, message: 'Voucher hết hạn hoặc chưa hiệu lực' });
   }
   if (v.onlyVip && !req.user.isVip) {
     return res.status(403).json({ success: false, message: 'Voucher dành cho VIP' });
