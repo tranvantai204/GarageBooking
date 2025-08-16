@@ -281,10 +281,11 @@ io.on('connection', (socket) => {
 
   // Handle typing indicators
   socket.on('typing', (data) => {
-    const { chatId, isTyping } = data;
-    socket.to(chatId).emit('user_typing', {
+    const { chatId, isTyping } = data || {};
+    if (!chatId) return;
+    io.to(chatId).emit(isTyping ? 'typing_start' : 'typing_stop', {
+      chatId,
       userId: socket.userId,
-      isTyping
     });
   });
 
@@ -292,7 +293,7 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     if (socket.userId) {
       connectedUsers.delete(socket.userId);
-      io.emit('user_status_update', { userId: socket.userId, isOnline: false });
+      io.emit('user_status_update', { userId: socket.userId, isOnline: false, lastActiveAt: new Date().toISOString() });
       console.log(`👤 User ${socket.userId} disconnected`);
     }
     console.log('🔌 User disconnected:', socket.id);
