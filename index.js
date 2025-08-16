@@ -239,6 +239,40 @@ io.on('connection', (socket) => {
       io.to(chatId).emit('new_message', message);
 
       console.log(`💬 Message sent in chat ${chatId} by ${user.hoTen}`);
+
+      // Send FCM push to other participants (for background/terminated apps)
+      try {
+        const recipientIds = chat.participants
+          .map((p) => String(p.userId))
+          .filter((id) => id !== String(userId));
+        if (recipientIds.length > 0) {
+          const tokens = await PushToken.find({ userId: { $in: recipientIds } });
+          const tokenList = tokens.map((t) => t.token).filter(Boolean);
+          if (tokenList.length > 0) {
+            const preview = (content || '').toString().slice(0, 120);
+            const multicast = {
+              notification: {
+                title: `Tin nhắn mới từ ${user.hoTen}`,
+                body: preview,
+              },
+              data: {
+                type: 'chat_message',
+                chatId: String(chatId),
+                senderId: String(userId),
+                senderName: String(user.hoTen || ''),
+              },
+              android: {
+                priority: 'high',
+                notification: { channelId: 'general_notifications', priority: 'high' },
+              },
+              tokens: tokenList,
+            };
+            await admin.messaging().sendEachForMulticast(multicast);
+          }
+        }
+      } catch (pushErr) {
+        console.error('FCM chat push error:', pushErr);
+      }
     } catch (error) {
       console.error('Send message error:', error);
       socket.emit('error', { message: 'Failed to send message' });

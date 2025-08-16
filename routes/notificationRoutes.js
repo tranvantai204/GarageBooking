@@ -81,4 +81,23 @@ router.delete('/admin/:id', protect, async (req, res) => {
   }
 });
 
+// Update one admin notification
+router.put('/admin/:id', protect, async (req, res) => {
+  try {
+    if (!req.user || req.user.vaiTro !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Admin only' });
+    }
+    const { title, body, data = {} } = req.body || {};
+    const updated = await AdminNotification.findByIdAndUpdate(
+      req.params.id,
+      { title, body, data },
+      { new: true }
+    );
+    res.json({ success: true, item: updated });
+  } catch (e) {
+    console.error('Update admin notification error:', e);
+    res.status(500).json({ success: false });
+  }
+});
+
 
