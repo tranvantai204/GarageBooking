@@ -323,6 +323,20 @@ io.on('connection', (socket) => {
         if (targetSocketId) {
           io.to(targetSocketId).emit('call_cancelled', { channelName });
         }
+        // Also send FCM to ensure callee sees cancel when app is background
+        (async () => {
+          try {
+            const tokenDoc = await PushToken.findOne({ userId: targetUserId });
+            const token = tokenDoc?.token;
+            if (token) {
+              await admin.messaging().send({
+                token,
+                data: { type: 'call_cancelled', channelName: String(channelName || '') },
+                android: { priority: 'high', notification: { channelId: 'incoming_call', priority: 'high' } },
+              });
+            }
+          } catch (e) {}
+        })();
       } catch (err) {
         console.error('cancel_call error:', err);
       }
@@ -362,6 +376,20 @@ io.on('connection', (socket) => {
       if (peerSocketId) {
         io.to(peerSocketId).emit('call_ended', { channelName });
       }
+      // Also push FCM so peer out-of-app exits popup
+      (async () => {
+        try {
+          const tokenDoc = await PushToken.findOne({ userId: peerUserId });
+          const token = tokenDoc?.token;
+          if (token) {
+            await admin.messaging().send({
+              token,
+              data: { type: 'call_ended', channelName: String(channelName || '') },
+              android: { priority: 'high', notification: { channelId: 'incoming_call', priority: 'high' } },
+            });
+          }
+        } catch (e) {}
+      })();
     } catch (err) {
       console.error('end_call error:', err);
     }

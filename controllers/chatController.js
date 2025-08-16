@@ -386,6 +386,7 @@ exports.sendMessage = async (req, res) => {
     // Populate reply message if exists
     await message.populate('replyTo', 'content senderName');
 
+    // Emit socket event and FCM push moved to socket layer for realtime; still return message
     res.json({
       success: true,
       data: message
