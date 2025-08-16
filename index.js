@@ -66,6 +66,8 @@ const io = socketIo(server, {
 const Chat = require('./models/Chat');
 const Message = require('./models/Message');
 const User = require('./models/User');
+const PushToken = require('./models/PushToken');
+const admin = require('./init_fcm');
 
 // Store connected users
 const connectedUsers = new Map();
@@ -99,7 +101,7 @@ io.on('connection', (socket) => {
   });
 
   // Defensive: re-map on start_call if caller provided (single handler)
-  socket.on('start_call', (data) => {
+  socket.on('start_call', async (data) => {
     try {
       const { targetUserId, channelName, caller } = data || {};
       if (caller && caller.userId) {
@@ -112,6 +114,33 @@ io.on('connection', (socket) => {
         console.log(`📞 Incoming call to ${targetUserId} on channel ${channelName}`);
       } else {
         console.log(`⚠️ Target user ${targetUserId} is not connected`);
+      }
+
+      // Always send FCM push for incoming call so callee can see when app is background/terminated
+      try {
+        const tokenDoc = await PushToken.findOne({ userId: targetUserId });
+        const targetFcmToken = tokenDoc?.token;
+        if (targetFcmToken) {
+          const message = {
+            token: targetFcmToken,
+            data: {
+              type: 'incoming_call',
+              channelName: String(channelName),
+              callerName: String(caller?.userName || 'Người gọi'),
+              callerUserId: String(caller?.userId || ''),
+            },
+            android: {
+              priority: 'high',
+              notification: { channelId: 'incoming_call', priority: 'max' },
+            },
+          };
+          await admin.messaging().send(message);
+          console.log(`🔔 Sent FCM incoming_call to user ${targetUserId}`);
+        } else {
+          console.log(`ℹ️ No FCM token for user ${targetUserId}`);
+        }
+      } catch (pushErr) {
+        console.error('FCM push error:', pushErr);
       }
     } catch (err) {
       console.error('start_call error:', err);
