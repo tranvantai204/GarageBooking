@@ -128,6 +128,8 @@ io.on('connection', (socket) => {
               channelName: String(channelName),
               callerName: String(caller?.userName || 'Người gọi'),
               callerUserId: String(caller?.userId || ''),
+              callerRole: String(caller?.role || caller?.vaiTro || 'user'),
+              callerAvatarUrl: String(caller?.avatarUrl || ''),
             },
             android: {
               priority: 'high',
@@ -145,6 +147,8 @@ io.on('connection', (socket) => {
               channelName: String(channelName),
               callerName: String(caller?.userName || 'Người gọi'),
               callerUserId: String(caller?.userId || ''),
+              callerRole: String(caller?.role || caller?.vaiTro || 'user'),
+              callerAvatarUrl: String(caller?.avatarUrl || ''),
             },
             android: {
               priority: 'high',
