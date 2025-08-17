@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Booking = require('../models/Booking');
 const User = require('../models/User');
+const WalletTx = require('../models/WalletTransaction');
 
 // Simple webhook to auto-confirm bank transfers (e.g., from Casso)
 // Expect body: { description, amount, accountNumber, bankCode, txnId }
@@ -39,6 +40,7 @@ router.post('/webhook/casso', async (req, res) => {
         if (!user) return res.json({ success: true, skipped: true, reason: 'User not found for topup' });
         user.viSoDu = (user.viSoDu || 0) + paid;
         await user.save();
+        await WalletTx.create({ userId, type: 'topup', amount: paid, ref: txnId || '' });
         return res.json({ success: true, walletTopup: true, balance: user.viSoDu });
       }
       return res.json({ success: true, skipped: true, reason: 'No booking code' });
@@ -63,6 +65,7 @@ router.post('/webhook/casso', async (req, res) => {
     booking.paymentRef = String(txnId || '').slice(0, 128);
     booking.paidAt = new Date();
     await booking.save();
+    try { await WalletTx.create({ userId: booking.userId, type: 'payment', amount: paid, ref: txnId || '' }); } catch (_) {}
 
     return res.json({ success: true, updated: true });
   } catch (e) {

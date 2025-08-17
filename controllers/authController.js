@@ -89,6 +89,7 @@ exports.getMe = async (req, res) => {
         loaiXe: user.loaiXe,
         avatarUrl: user.avatarUrl,
         isActive: user.isActive,
+        viSoDu: user.viSoDu || 0,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt
       }

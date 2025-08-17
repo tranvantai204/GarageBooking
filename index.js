@@ -27,6 +27,7 @@ const feedbackRoutes = require('./routes/feedbackRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const refundRoutes = require('./routes/refundRoutes');
+const walletRoutes = require('./routes/walletRoutes');
 
 const app = express();
 
@@ -51,6 +52,7 @@ app.use('/api/feedbacks', feedbackRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/refunds', refundRoutes);
+app.use('/api/wallet', walletRoutes);
 
 // Serve static files (uploaded images)
 app.use('/uploads', express.static('uploads'));
