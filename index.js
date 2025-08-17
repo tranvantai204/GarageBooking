@@ -137,7 +137,22 @@ io.on('connection', (socket) => {
           await admin.messaging().send(message);
           console.log(`🔔 Sent FCM incoming_call to user ${targetUserId}`);
         } else {
-          console.log(`ℹ️ No FCM token for user ${targetUserId}`);
+          // Fallback to user topic (works even if user hasn't re-logged)
+          const topicMessage = {
+            topic: `user_${String(targetUserId)}`,
+            data: {
+              type: 'incoming_call',
+              channelName: String(channelName),
+              callerName: String(caller?.userName || 'Người gọi'),
+              callerUserId: String(caller?.userId || ''),
+            },
+            android: {
+              priority: 'high',
+              notification: { channelId: 'incoming_call', priority: 'max' },
+            },
+          };
+          await admin.messaging().send(topicMessage);
+          console.log(`🔔 Sent FCM (topic) incoming_call to user ${targetUserId}`);
         }
       } catch (pushErr) {
         console.error('FCM push error:', pushErr);
@@ -334,6 +349,12 @@ io.on('connection', (socket) => {
                 data: { type: 'call_cancelled', channelName: String(channelName || '') },
                 android: { priority: 'high', notification: { channelId: 'incoming_call', priority: 'high' } },
               });
+            } else {
+              await admin.messaging().send({
+                topic: `user_${String(targetUserId)}`,
+                data: { type: 'call_cancelled', channelName: String(channelName || '') },
+                android: { priority: 'high', notification: { channelId: 'incoming_call', priority: 'high' } },
+              });
             }
           } catch (e) {}
         })();
@@ -384,6 +405,12 @@ io.on('connection', (socket) => {
           if (token) {
             await admin.messaging().send({
               token,
+              data: { type: 'call_ended', channelName: String(channelName || '') },
+              android: { priority: 'high', notification: { channelId: 'incoming_call', priority: 'high' } },
+            });
+          } else {
+            await admin.messaging().send({
+              topic: `user_${String(peerUserId)}`,
               data: { type: 'call_ended', channelName: String(channelName || '') },
               android: { priority: 'high', notification: { channelId: 'incoming_call', priority: 'high' } },
             });
