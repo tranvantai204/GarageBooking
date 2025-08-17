@@ -34,18 +34,42 @@ router.post('/webhook/casso', async (req, res) => {
     const normalized = desc.toUpperCase().replace(/\s+/g, '');
     const match = normalized.match(/BOOK-([A-Z0-9\-]+)/);
     if (!match) {
-      const topup = normalized.match(/TOPUP-?([A-F0-9]{24})/);
-      if (topup) {
-        const userId = topup[1].toLowerCase();
+      // 1) TOPUP-<MongoId>
+      const topupByUserId = normalized.match(/TOPUP-?([A-F0-9]{24})/);
+      if (topupByUserId) {
+        const userId = topupByUserId[1].toLowerCase();
         const paid = parseInt(amount, 10) || 0;
         const user = await User.findById(userId);
         if (!user) return res.json({ success: true, skipped: true, reason: 'User not found for topup' });
         user.viSoDu = (user.viSoDu || 0) + paid;
         await user.save();
         await WalletTx.create({ userId, type: 'topup', amount: paid, ref: txnId || '' });
-        return res.json({ success: true, walletTopup: true, balance: user.viSoDu });
+        return res.json({ success: true, walletTopup: true, via: 'userId', balance: user.viSoDu });
       }
-      return res.json({ success: true, skipped: true, reason: 'No booking code' });
+
+      // 2) TOPUP-<phone> (9-11 digits, accepts 0xxxxxxxxx or 84xxxxxxxxx)
+      const topupByPhone = normalized.match(/TOPUP-?(\+?84|0)?(\d{9,10})/);
+      if (topupByPhone) {
+        const prefix = topupByPhone[1] || '';
+        const digits = topupByPhone[2] || '';
+        // Normalize to leading 0
+        let phone = digits;
+        if (!prefix || prefix === '0') {
+          phone = '0' + digits.slice(-9);
+        } else {
+          // +84 or 84
+          phone = '0' + digits.slice(-9);
+        }
+        const paid = parseInt(amount, 10) || 0;
+        const user = await User.findOne({ soDienThoai: phone });
+        if (!user) return res.json({ success: true, skipped: true, reason: 'User phone not found', phone });
+        user.viSoDu = (user.viSoDu || 0) + paid;
+        await user.save();
+        await WalletTx.create({ userId: user._id, type: 'topup', amount: paid, ref: txnId || '' });
+        return res.json({ success: true, walletTopup: true, via: 'phone', phone, balance: user.viSoDu });
+      }
+
+      return res.json({ success: true, skipped: true, reason: 'No booking code or recognizable TOPUP tag' });
     }
     const maVe = match[1];
     const booking = await Booking.findOne({ maVe });

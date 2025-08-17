@@ -31,8 +31,9 @@ const walletRoutes = require('./routes/walletRoutes');
 
 const app = express();
 
-// Body parser
+// Body parsers (support JSON and x-www-form-urlencoded from payment providers)
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Enable CORS
 app.use(cors());
