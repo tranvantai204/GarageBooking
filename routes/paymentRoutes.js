@@ -10,7 +10,7 @@ const WalletTx = require('../models/WalletTransaction');
 router.post('/webhook/casso', async (req, res) => {
   try {
     const provided = req.headers['x-webhook-secret'] || req.query.secret || '';
-    const secret = process.env.WEBHOOK_SECRET || 'CHANGE_ME_SECRET';
+    const secret = process.env.WEBHOOK_SECRET || 'abc123';
     if (!secret || provided !== secret) {
       return res.status(401).json({ success: false, message: 'Invalid secret' });
     }
@@ -19,8 +19,9 @@ router.post('/webhook/casso', async (req, res) => {
     // Only process credits to our MB account
     const OUR_ACC = (process.env.PAY_ACC || '0585761955').trim();
     const OUR_BANK = (process.env.PAY_BANK || 'MB').trim().toUpperCase();
-    if (!accountNumber || String(accountNumber) !== OUR_ACC) {
-      return res.json({ success: true, skipped: true });
+    // Some providers may omit accountNumber. If provided and mismatched, skip; if missing, proceed.
+    if (accountNumber && String(accountNumber) !== OUR_ACC) {
+      return res.json({ success: true, skipped: true, reason: 'Different account' });
     }
     if (bankCode && String(bankCode).toUpperCase() !== OUR_BANK) {
       // still proceed if provider does not send bankCode
@@ -30,11 +31,12 @@ router.post('/webhook/casso', async (req, res) => {
     // 1) BOOK-<maVe> => mark booking paid
     // 2) TOPUP-<userId24> => add to user's wallet
     const desc = String(description || '');
-    const match = desc.match(/BOOK-([A-Za-z0-9\-]+)/);
+    const normalized = desc.toUpperCase().replace(/\s+/g, '');
+    const match = normalized.match(/BOOK-([A-Z0-9\-]+)/);
     if (!match) {
-      const topup = desc.match(/TOPUP-([a-f0-9]{24})/i);
+      const topup = normalized.match(/TOPUP-?([A-F0-9]{24})/);
       if (topup) {
-        const userId = topup[1];
+        const userId = topup[1].toLowerCase();
         const paid = parseInt(amount, 10) || 0;
         const user = await User.findById(userId);
         if (!user) return res.json({ success: true, skipped: true, reason: 'User not found for topup' });
