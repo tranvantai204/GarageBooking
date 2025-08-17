@@ -24,6 +24,7 @@ const voucherRoutes = require('./routes/voucherRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const systemRoutes = require('./routes/systemRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 
 const app = express();
@@ -46,6 +47,7 @@ app.use('/api/vouchers', voucherRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/system', systemRoutes);
 app.use('/api/feedbacks', feedbackRoutes);
+app.use('/api/payments', paymentRoutes);
 app.use('/api/upload', uploadRoutes);
 
 // Serve static files (uploaded images)

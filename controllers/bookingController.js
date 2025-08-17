@@ -250,6 +250,29 @@ exports.checkInBooking = async (req, res) => {
     }
 }
 
+// @desc    Mark booking as paid
+// @route   POST /api/bookings/:id/pay
+// @access  Private (user or admin)
+exports.payBooking = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { method, reference } = req.body; // method: 'cash' | 'bank'
+    const booking = await Booking.findById(id);
+    if (!booking) return res.status(404).json({ success: false, message: 'Không tìm thấy vé' });
+    if (booking.userId.toString() !== req.user._id.toString() && req.user.vaiTro !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Không có quyền thanh toán vé này' });
+    }
+    booking.trangThaiThanhToan = 'da_thanh_toan';
+    booking.paymentMethod = method === 'bank' ? 'bank' : 'cash';
+    booking.paymentRef = reference || undefined;
+    booking.paidAt = new Date();
+    await booking.save();
+    res.json({ success: true, message: 'Thanh toán thành công', data: booking });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+  }
+}
+
 // @desc    Lấy danh sách hành khách của chuyến đi (cho tài xế)
 // @route   GET /api/bookings/trip/:tripId/passengers
 // @access  Private (chỉ tài xế và admin)
