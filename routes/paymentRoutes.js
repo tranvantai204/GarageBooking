@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Booking = require('../models/Booking');
+const User = require('../models/User');
 
 // Simple webhook to auto-confirm bank transfers (e.g., from Casso)
 // Expect body: { description, amount, accountNumber, bankCode, txnId }
@@ -24,9 +25,22 @@ router.post('/webhook/casso', async (req, res) => {
       // still proceed if provider does not send bankCode
     }
 
-    // Extract booking code: BOOK-<maVe>
-    const match = String(description).match(/BOOK-([A-Za-z0-9\-]+)/);
+    // Extract patterns from description
+    // 1) BOOK-<maVe> => mark booking paid
+    // 2) TOPUP-<userId24> => add to user's wallet
+    const desc = String(description || '');
+    const match = desc.match(/BOOK-([A-Za-z0-9\-]+)/);
     if (!match) {
+      const topup = desc.match(/TOPUP-([a-f0-9]{24})/i);
+      if (topup) {
+        const userId = topup[1];
+        const paid = parseInt(amount, 10) || 0;
+        const user = await User.findById(userId);
+        if (!user) return res.json({ success: true, skipped: true, reason: 'User not found for topup' });
+        user.viSoDu = (user.viSoDu || 0) + paid;
+        await user.save();
+        return res.json({ success: true, walletTopup: true, balance: user.viSoDu });
+      }
       return res.json({ success: true, skipped: true, reason: 'No booking code' });
     }
     const maVe = match[1];

@@ -24,6 +24,8 @@ const userSchema = new mongoose.Schema({
 
   isActive: { type: Boolean, default: true },
   isVip: { type: Boolean, default: false },
+  // Simple in-app wallet balance (VND)
+  viSoDu: { type: Number, default: 0 },
 }, { timestamps: true });
 
 userSchema.pre('save', async function (next) {

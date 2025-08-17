@@ -2,6 +2,7 @@
 const Booking = require('../models/Booking');
 const Trip = require('../models/Trip');
 const QRCode = require('qrcode');
+const User = require('../models/User');
 
 // @desc    Tạo lượt đặt vé mới
 // @route   POST /api/bookings
@@ -252,15 +253,41 @@ exports.checkInBooking = async (req, res) => {
 
 // @desc    Mark booking as paid
 // @route   POST /api/bookings/:id/pay
-// @access  Private (user or admin)
+// @access  Private (cash: driver/admin only, bank: user allowed)
 exports.payBooking = async (req, res) => {
   try {
     const { id } = req.params;
-    const { method, reference } = req.body; // method: 'cash' | 'bank'
+    const { method, reference } = req.body; // method: 'cash' | 'bank' | 'wallet'
     const booking = await Booking.findById(id);
     if (!booking) return res.status(404).json({ success: false, message: 'Không tìm thấy vé' });
-    if (booking.userId.toString() !== req.user._id.toString() && req.user.vaiTro !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Không có quyền thanh toán vé này' });
+    // Quyền xác nhận thanh toán:
+    // - method 'cash': chỉ 'admin' hoặc 'tai_xe'/'driver' được phép xác nhận
+    // - method 'bank': cho phép chủ vé tự xác nhận (tạm thời), admin vẫn có quyền
+    const isOwner = booking.userId.toString() === req.user._id.toString();
+    const isAdmin = req.user.vaiTro === 'admin';
+    const isDriver = req.user.vaiTro === 'tai_xe' || req.user.vaiTro === 'driver';
+
+    if (method === 'cash') {
+      if (!(isAdmin || isDriver)) {
+        return res.status(403).json({ success: false, message: 'Chỉ tài xế hoặc admin mới được xác nhận tiền mặt' });
+      }
+    } else if (method === 'wallet') {
+      // thanh toán từ ví: chỉ chủ vé hoặc admin
+      if (!(isOwner || isAdmin)) {
+        return res.status(403).json({ success: false, message: 'Không có quyền thanh toán ví cho vé này' });
+      }
+      const user = await User.findById(booking.userId);
+      if (!user) return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
+      if ((user.viSoDu || 0) < booking.tongTien) {
+        return res.status(400).json({ success: false, message: 'Số dư ví không đủ' });
+      }
+      user.viSoDu = (user.viSoDu || 0) - booking.tongTien;
+      await user.save();
+    } else {
+      // bank
+      if (!(isOwner || isAdmin)) {
+        return res.status(403).json({ success: false, message: 'Không có quyền thanh toán vé này' });
+      }
     }
     booking.trangThaiThanhToan = 'da_thanh_toan';
     booking.paymentMethod = method === 'bank' ? 'bank' : 'cash';
