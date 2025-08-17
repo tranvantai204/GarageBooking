@@ -8,7 +8,7 @@ const User = require('../models/User');
 // @route   POST /api/bookings
 // @access  Private
 exports.createBooking = async (req, res) => {
-  const { tripId, danhSachGheDat, voucherCode, discountAmount, loaiDiemDon, diaChiDon, ghiChuDiemDon, thongTinKhachHang } = req.body; // danhSachGheDat là mảng ghế user muốn đặt
+  const { tripId, danhSachGheDat, voucherCode, discountAmount, loaiDiemDon, diaChiDon, ghiChuDiemDon, thongTinKhachHang, forPhone } = req.body; // danhSachGheDat là mảng ghế user muốn đặt; forPhone dùng cho tài xế đặt hộ
 
   try {
     // 1. Tìm chuyến đi trong DB
@@ -84,6 +84,16 @@ exports.createBooking = async (req, res) => {
         hinhAnh: Array.isArray(trip.vehicleInfo?.hinhAnh) ? trip.vehicleInfo.hinhAnh : [],
       };
     } catch (e) {}
+
+    // Nếu tài xế đặt hộ (forPhone), tìm hoặc tạo user theo số điện thoại và gán userId vào vé
+    if (forPhone && typeof forPhone === 'string' && forPhone.trim()) {
+      const phone = forPhone.trim();
+      let user = await User.findOne({ soDienThoai: phone });
+      if (!user) {
+        user = await User.create({ hoTen: 'Khách lẻ', soDienThoai: phone, matKhau: 'Temp@1234' });
+      }
+      bookingPayload.userId = user._id;
+    }
 
     const booking = await Booking.create(bookingPayload);
 

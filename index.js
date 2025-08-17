@@ -340,6 +340,50 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ===== Trip lifecycle events =====
+  socket.on('trip_started', async (data) => {
+    try {
+      const { tripId, driverId } = data || {};
+      io.emit('trip_status_update', { tripId, driverId, status: 'started', ts: Date.now() });
+      // Push a notification to all admins
+      try {
+        const admins = await User.find({ vaiTro: 'admin' }).select('_id');
+        const adminIds = admins.map((u) => String(u._id));
+        if (adminIds.length > 0) {
+          const tokens = await PushToken.find({ userId: { $in: adminIds } });
+          const tokenList = tokens.map((t) => t.token).filter(Boolean);
+          if (tokenList.length > 0) {
+            await admin.messaging().sendEachForMulticast({
+              tokens: tokenList,
+              notification: {
+                title: 'Chuyến xe đang di chuyển',
+                body: `Tài xế ${driverId || ''} đã bắt đầu chuyến ${tripId || ''}`,
+              },
+              data: { type: 'trip_started', tripId: String(tripId || ''), driverId: String(driverId || '') },
+              android: {
+                priority: 'high',
+                notification: { channelId: 'general_notifications', priority: 'high' },
+              },
+            });
+          }
+        }
+      } catch (pushErr) {
+        console.error('trip_started push error:', pushErr);
+      }
+    } catch (e) {
+      console.error('trip_started error', e);
+    }
+  });
+
+  socket.on('trip_ended', async (data) => {
+    try {
+      const { tripId, driverId } = data || {};
+      io.emit('trip_status_update', { tripId, driverId, status: 'ended', ts: Date.now() });
+    } catch (e) {
+      console.error('trip_ended error', e);
+    }
+  });
+
     // ===== Voice Call Signaling =====
     // (start_call handled above)
 
