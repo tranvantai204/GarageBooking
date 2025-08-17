@@ -16,6 +16,7 @@ router.post('/webhook/casso', async (req, res) => {
     }
 
     const { description = '', amount, accountNumber, bankCode, txnId } = req.body || {};
+    const txRef = String(txnId || '').trim();
     // Only process credits to our MB account
     const OUR_ACC = (process.env.PAY_ACC || '0585761955').trim();
     const OUR_BANK = (process.env.PAY_BANK || 'MB').trim().toUpperCase();
@@ -37,19 +38,34 @@ router.post('/webhook/casso', async (req, res) => {
       // 1) TOPUP-<MongoId>
       const topupByUserId = normalized.match(/TOPUP-?([A-F0-9]{24})/);
       if (topupByUserId) {
+        // If we've already processed this txnId as a topup, return idempotent response
+        if (txRef) {
+          const exists = await WalletTx.findOne({ type: 'topup', ref: txRef }).lean();
+          if (exists) return res.json({ success: true, duplicate: true, type: 'topup', ref: txRef });
+        }
         const userId = topupByUserId[1].toLowerCase();
         const paid = parseInt(amount, 10) || 0;
         const user = await User.findById(userId);
         if (!user) return res.json({ success: true, skipped: true, reason: 'User not found for topup' });
         user.viSoDu = (user.viSoDu || 0) + paid;
         await user.save();
-        await WalletTx.create({ userId, type: 'topup', amount: paid, ref: txnId || '' });
+        try {
+          await WalletTx.create({ userId, type: 'topup', amount: paid, ref: txRef || '' });
+        } catch (e) {
+          if (e?.code === 11000) return res.json({ success: true, duplicate: true, type: 'topup', ref: txRef });
+          throw e;
+        }
         return res.json({ success: true, walletTopup: true, via: 'userId', balance: user.viSoDu });
       }
 
       // 2) TOPUP-<phone> (9-11 digits, accepts 0xxxxxxxxx or 84xxxxxxxxx)
       const topupByPhone = normalized.match(/TOPUP-?(\+?84|0)?(\d{9,10})/);
       if (topupByPhone) {
+        // If we've already processed this txnId as a topup, return idempotent response
+        if (txRef) {
+          const exists = await WalletTx.findOne({ type: 'topup', ref: txRef }).lean();
+          if (exists) return res.json({ success: true, duplicate: true, type: 'topup', ref: txRef });
+        }
         const prefix = topupByPhone[1] || '';
         const digits = topupByPhone[2] || '';
         // Normalize to leading 0
@@ -65,7 +81,12 @@ router.post('/webhook/casso', async (req, res) => {
         if (!user) return res.json({ success: true, skipped: true, reason: 'User phone not found', phone });
         user.viSoDu = (user.viSoDu || 0) + paid;
         await user.save();
-        await WalletTx.create({ userId: user._id, type: 'topup', amount: paid, ref: txnId || '' });
+        try {
+          await WalletTx.create({ userId: user._id, type: 'topup', amount: paid, ref: txRef || '' });
+        } catch (e) {
+          if (e?.code === 11000) return res.json({ success: true, duplicate: true, type: 'topup', ref: txRef });
+          throw e;
+        }
         return res.json({ success: true, walletTopup: true, via: 'phone', phone, balance: user.viSoDu });
       }
 
@@ -86,12 +107,21 @@ router.post('/webhook/casso', async (req, res) => {
       return res.json({ success: true, skipped: true, reason: 'Amount mismatch' });
     }
 
+    // If this payment txnId was processed already, treat as idempotent
+    if (txRef) {
+      const exists = await WalletTx.findOne({ type: 'payment', ref: txRef }).lean();
+      if (exists) return res.json({ success: true, duplicate: true, type: 'payment', ref: txRef });
+    }
+
     booking.trangThaiThanhToan = 'da_thanh_toan';
     booking.paymentMethod = 'bank';
-    booking.paymentRef = String(txnId || '').slice(0, 128);
+    booking.paymentRef = txRef.slice(0, 128);
     booking.paidAt = new Date();
     await booking.save();
-    try { await WalletTx.create({ userId: booking.userId, type: 'payment', amount: paid, ref: txnId || '' }); } catch (_) {}
+    try { await WalletTx.create({ userId: booking.userId, type: 'payment', amount: paid, ref: txRef || '' }); } catch (e) {
+      if (e?.code === 11000) return res.json({ success: true, duplicate: true, type: 'payment', ref: txRef });
+      throw e;
+    }
 
     return res.json({ success: true, updated: true });
   } catch (e) {

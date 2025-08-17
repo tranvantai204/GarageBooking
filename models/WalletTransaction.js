@@ -7,6 +7,13 @@ const walletTxSchema = new mongoose.Schema({
   ref: { type: String },
 }, { timestamps: true });
 
+// Avoid double processing by enforcing uniqueness for (type, ref) when ref exists
+// This makes topup/payment idempotent across retries provided the provider sends the same txnId
+walletTxSchema.index(
+  { type: 1, ref: 1 },
+  { unique: true, partialFilterExpression: { ref: { $exists: true, $ne: '' } } }
+);
+
 module.exports = mongoose.model('WalletTransaction', walletTxSchema);
 
 
