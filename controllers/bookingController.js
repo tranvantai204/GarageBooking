@@ -74,6 +74,16 @@ exports.createBooking = async (req, res) => {
       bookingPayload.thongTinKhachHang = thongTinKhachHang;
     }
 
+    // 7.1 Embed vehicle snapshot from trip
+    try {
+      bookingPayload.vehicleSnapshot = {
+        tenXe: trip.vehicleInfo?.tenXe,
+        hangXe: trip.vehicleInfo?.hangXe,
+        bienSoXe: trip.vehicleInfo?.bienSoXe || trip.bienSoXe,
+        hinhAnh: Array.isArray(trip.vehicleInfo?.hinhAnh) ? trip.vehicleInfo.hinhAnh : [],
+      };
+    } catch (e) {}
+
     const booking = await Booking.create(bookingPayload);
 
     res.status(201).json({ success: true, data: booking });

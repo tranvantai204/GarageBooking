@@ -53,6 +53,13 @@ const tripSchema = new mongoose.Schema({
     type: String,
     default: "ghe_ngoi"
   },
+  vehicleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle' },
+  vehicleInfo: {
+    tenXe: { type: String },
+    hangXe: { type: String },
+    bienSoXe: { type: String },
+    hinhAnh: [{ type: String }]
+  },
   trangThai: {
     type: String,
     enum: ['chua_khoi_hanh', 'dang_di', 'da_hoan_thanh', 'da_huy'],

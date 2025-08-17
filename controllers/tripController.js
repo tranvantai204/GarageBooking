@@ -16,7 +16,8 @@ exports.createTrip = async (req, res) => {
       taiXe,
       taiXeId,
       bienSoXe,
-      loaiXe
+      loaiXe,
+      vehicleId,
     } = req.body;
 
     // 1. Tạo danh sách ghế tự động
@@ -30,7 +31,7 @@ exports.createTrip = async (req, res) => {
     }
 
     // 2. Tạo chuyến đi mới trong database
-    const trip = await Trip.create({
+    const tripData = {
       diemDi,
       diemDen,
       thoiGianKhoiHanh,
@@ -39,8 +40,36 @@ exports.createTrip = async (req, res) => {
       taiXe: taiXe || "Chưa cập nhật",
       taiXeId: taiXeId || null,
       bienSoXe: bienSoXe || "Chưa cập nhật",
-      loaiXe: loaiXe || "ghe_ngoi"
-    });
+      loaiXe: loaiXe || "ghe_ngoi",
+    };
+
+    if (vehicleId) {
+      try {
+        const Vehicle = require('../models/Vehicle');
+        const v = await Vehicle.findById(vehicleId);
+        if (v) {
+          tripData.vehicleId = v._id;
+          tripData.vehicleInfo = {
+            tenXe: v.tenXe,
+            hangXe: v.hangXe,
+            bienSoXe: v.bienSoXe,
+            hinhAnh: Array.isArray(v.hinhAnh) ? v.hinhAnh : [],
+          };
+          // If not provided, derive fields from vehicle
+          if (!tripData.bienSoXe || tripData.bienSoXe === 'Chưa cập nhật') {
+            tripData.bienSoXe = v.bienSoXe;
+          }
+          if (!loaiXe) {
+            tripData.loaiXe = v.loaiXe || 'ghe_ngoi';
+          }
+          if (!soGhe && v.soGhe) {
+            tripData.soGhe = v.soGhe;
+          }
+        }
+      } catch (e) {}
+    }
+
+    const trip = await Trip.create(tripData);
 
     res.status(201).json({ success: true, data: trip });
 

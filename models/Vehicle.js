@@ -6,6 +6,10 @@ const vehicleSchema = new mongoose.Schema(
     loaiXe: { type: String, enum: ['ghe_ngoi', 'giuong_nam', 'limousine'], default: 'ghe_ngoi' },
     soGhe: { type: Number, required: true },
     trangThai: { type: String, enum: ['hoat_dong', 'bao_tri', 'ngung'], default: 'hoat_dong' },
+    tenXe: { type: String },
+    hangXe: { type: String },
+    hinhAnh: [{ type: String }], // URLs to images
+    moTa: { type: String },
     ghiChu: { type: String },
   },
   { timestamps: true }

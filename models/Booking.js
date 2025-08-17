@@ -59,5 +59,15 @@ bookingSchema.add({
   }
 });
 
+// Snapshot vehicle info into ticket after purchase
+bookingSchema.add({
+  vehicleSnapshot: {
+    tenXe: { type: String },
+    hangXe: { type: String },
+    bienSoXe: { type: String },
+    hinhAnh: [{ type: String }]
+  }
+});
+
 const Booking = mongoose.model('Booking', bookingSchema);
 module.exports = Booking;

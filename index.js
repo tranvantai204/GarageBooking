@@ -23,7 +23,8 @@ const vehicleRoutes = require('./routes/vehicleRoutes');
 const voucherRoutes = require('./routes/voucherRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const systemRoutes = require('./routes/systemRoutes');
-// const uploadRoutes = require('./routes/uploadRoutes');
+const feedbackRoutes = require('./routes/feedbackRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
 
 const app = express();
 
@@ -44,7 +45,8 @@ app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/vouchers', voucherRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/system', systemRoutes);
-// app.use('/api/upload', uploadRoutes);
+app.use('/api/feedbacks', feedbackRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Serve static files (uploaded images)
 app.use('/uploads', express.static('uploads'));
