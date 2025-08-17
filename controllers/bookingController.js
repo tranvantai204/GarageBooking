@@ -98,7 +98,9 @@ exports.createBooking = async (req, res) => {
 // @access  Private
 exports.getMyBookings = async (req, res) => {
     try {
-        const bookings = await Booking.find({ userId: req.user._id }).populate('tripId', 'diemDi diemDen thoiGianKhoiHanh');
+        const bookings = await Booking.find({ userId: req.user._id })
+          .populate('tripId', 'diemDi diemDen thoiGianKhoiHanh taiXe bienSoXe loaiXe vehicleInfo')
+          .sort({ createdAt: -1 });
         res.status(200).json({ success: true, count: bookings.length, data: bookings });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
