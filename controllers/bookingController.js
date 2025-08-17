@@ -258,7 +258,7 @@ exports.getTripPassengers = async (req, res) => {
         const { tripId } = req.params;
 
         // 1. Kiểm tra quyền
-        if (req.user.vaiTro !== 'admin' && req.user.vaiTro !== 'tai_xe') {
+        if (req.user.vaiTro !== 'admin' && req.user.vaiTro !== 'tai_xe' && req.user.vaiTro !== 'driver') {
             return res.status(403).json({ success: false, message: 'Không có quyền truy cập' });
         }
 
