@@ -131,7 +131,7 @@ async function processTransactionPayload(payload) {
       });
     }
   } catch (_) {}
-  return { success: true, updated: true };
+  return { success: true, updated: true, maVe };
 }
 
 // Simple webhook to auto-confirm bank transfers (e.g., from Casso)
@@ -186,6 +186,7 @@ router.post('/casso/sync', async (req, res) => {
     const json = await resp.json();
     const list = json?.data?.records || json?.data || json?.records || [];
     let processed = 0, updated = 0, topups = 0, duplicates = 0;
+    const discordUrl = process.env.DISCORD_WEBHOOK_URL;
     for (const t of list) {
       const payload = {
         description: t.description || t.content || t.remark || '',
@@ -200,6 +201,26 @@ router.post('/casso/sync', async (req, res) => {
         if (r.walletTopup) topups += 1;
         if (r.updated) updated += 1;
         if (r.duplicate) duplicates += 1;
+        // Optional: Post to Discord per processed item
+        if (discordUrl) {
+          try {
+            let content = '';
+            if (r.walletTopup) {
+              content = `✅ TOPUP +${payload.amount}đ (${r.via || ''}) txn:${payload.txnId || ''}`;
+            } else if (r.updated) {
+              content = `✅ BOOKING PAID mã vé ${r.maVe || ''} +${payload.amount}đ txn:${payload.txnId || ''}`;
+            } else if (r.duplicate) {
+              content = `⏭️ Bỏ qua giao dịch trùng txn:${payload.txnId || ''}`;
+            }
+            if (content) {
+              await fetch(discordUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content }),
+              });
+            }
+          } catch (_) {}
+        }
       } catch (_) {}
     }
     return res.json({ success: true, processed, updated, topups, duplicates });
