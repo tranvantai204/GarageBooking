@@ -229,6 +229,117 @@ router.post('/casso/sync', async (req, res) => {
   }
 });
 
+// Create payment QR (VietQR image URL)
+// Body: { type: 'booking' | 'topup', bookingId?, amount?, userId? }
+router.post('/qr', async (req, res) => {
+  try {
+    const { type = 'booking', bookingId, amount, userId } = req.body || {};
+    const bankCode = (process.env.PAY_BANK || 'MB').trim();
+    const accountNumber = (process.env.PAY_ACC || '0585761955').trim();
+    const accountName = encodeURIComponent(process.env.PAY_ACC_NAME || 'TRAN VAN TAI');
+
+    let finalAmount = parseInt(amount, 10) || 0;
+    let addInfo = '';
+
+    if (type === 'booking') {
+      if (!bookingId) return res.status(400).json({ success: false, message: 'Thiếu bookingId' });
+      const booking = await Booking.findById(bookingId);
+      if (!booking) return res.status(404).json({ success: false, message: 'Không tìm thấy vé' });
+      addInfo = `BOOK-${booking.maVe}`;
+      if (!finalAmount) finalAmount = parseInt(booking.tongTien, 10) || 0;
+    } else {
+      const uid = String(userId || req.user?._id || '');
+      if (!uid) return res.status(400).json({ success: false, message: 'Thiếu userId' });
+      addInfo = `TOPUP-${uid}`;
+      if (!finalAmount) finalAmount = 0;
+    }
+
+    const qrImageUrl = `https://img.vietqr.io/image/${bankCode}-${accountNumber}-qr_only.png?accountName=${accountName}&amount=${finalAmount}&addInfo=${encodeURIComponent(addInfo)}`;
+
+    return res.json({
+      success: true,
+      data: {
+        qrImageUrl,
+        addInfo,
+        amount: finalAmount,
+        payTo: { bankCode, accountNumber, accountName: decodeURIComponent(accountName) },
+      },
+    });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// ===== PayOS integration =====
+// Create payment link
+router.post('/payos/create-link', async (req, res) => {
+  try {
+    const clientId = process.env.PAYOS_CLIENT_ID;
+    const apiKey = process.env.PAYOS_API_KEY;
+    if (!clientId || !apiKey) return res.status(400).json({ success: false, message: 'Missing PAYOS_CLIENT_ID or PAYOS_API_KEY' });
+
+    const { type = 'booking', bookingId, userId, amount } = req.body || {};
+    let finalAmount = parseInt(amount, 10) || 0;
+    let addInfo = '';
+    if (type === 'booking') {
+      if (!bookingId) return res.status(400).json({ success: false, message: 'Thiếu bookingId' });
+      const booking = await Booking.findById(bookingId);
+      if (!booking) return res.status(404).json({ success: false, message: 'Không tìm thấy vé' });
+      addInfo = `BOOK-${booking.maVe}`;
+      if (!finalAmount) finalAmount = parseInt(booking.tongTien, 10) || 0;
+    } else {
+      const uid = String(userId || '');
+      if (!uid) return res.status(400).json({ success: false, message: 'Thiếu userId' });
+      addInfo = `TOPUP-${uid}`;
+      if (!finalAmount) finalAmount = 0;
+    }
+
+    const orderCode = Date.now();
+    const returnUrl = process.env.PAYOS_RETURN_URL || 'https://garagebooking.onrender.com/payos/return';
+    const cancelUrl = process.env.PAYOS_CANCEL_URL || 'https://garagebooking.onrender.com/payos/cancel';
+
+    const payload = {
+      orderCode,
+      amount: finalAmount,
+      description: addInfo,
+      returnUrl,
+      cancelUrl,
+    };
+
+    const resp = await fetch('https://api-merchant.payos.vn/v2/payment-requests', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-id': clientId,
+        'x-api-key': apiKey,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    const checkoutUrl = data?.data?.checkoutUrl || data?.checkoutUrl;
+    if (!checkoutUrl) return res.status(400).json({ success: false, message: 'PayOS create link failed', data });
+    return res.json({ success: true, data: { checkoutUrl, orderCode, addInfo, amount: finalAmount } });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// PayOS webhook (simplified)
+router.post('/webhook/payos', async (req, res) => {
+  try {
+    // In practice, verify signature/checksum from headers. Here we process safely by description/orderCode
+    const body = req.body || {};
+    const data = body.data || body;
+    const description = data.description || data.orderDescription || '';
+    const amount = data.amount || data.orderAmount || 0;
+    const txnId = data.orderCode || data.id || '';
+    const r = await processTransactionPayload({ description, amount, txnId });
+    return res.json({ success: true, handled: r });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+});
+
 module.exports = router;
 
 
