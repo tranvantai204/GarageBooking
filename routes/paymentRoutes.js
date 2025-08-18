@@ -3,6 +3,136 @@ const router = express.Router();
 const Booking = require('../models/Booking');
 const User = require('../models/User');
 const WalletTx = require('../models/WalletTransaction');
+const PushToken = require('../models/PushToken');
+const admin = require('../init_fcm');
+
+/**
+ * Internal helper to process a single transaction payload
+ * { description, amount, accountNumber, bankCode, txnId }
+ * Returns an object describing the effect (walletTopup / updated / skipped / duplicate)
+ */
+async function processTransactionPayload(payload) {
+  const { description = '', amount, accountNumber, bankCode, txnId } = payload || {};
+  const OUR_ACC = (process.env.PAY_ACC || '0585761955').trim();
+  const OUR_BANK = (process.env.PAY_BANK || 'MB').trim().toUpperCase();
+
+  if (accountNumber && String(accountNumber) !== OUR_ACC) {
+    return { success: true, skipped: true, reason: 'Different account' };
+  }
+  if (bankCode && String(bankCode).toUpperCase() !== OUR_BANK) {
+    // proceed anyway; some providers miss this field
+  }
+
+  const desc = String(description || '');
+  const normalized = desc.toUpperCase().replace(/\s+/g, '');
+
+  // TOPUP by MongoId
+  const topupByUserId = normalized.match(/TOPUP-?([A-F0-9]{24})/);
+  if (topupByUserId) {
+    const txRef = String(txnId || '').trim();
+    if (txRef) {
+      const exists = await WalletTx.findOne({ type: 'topup', ref: txRef }).lean();
+      if (exists) return { success: true, duplicate: true, type: 'topup', ref: txRef };
+    }
+    const userId = topupByUserId[1].toLowerCase();
+    const paid = parseInt(amount, 10) || 0;
+    const user = await User.findById(userId);
+    if (!user) return { success: true, skipped: true, reason: 'User not found for topup' };
+    user.viSoDu = (user.viSoDu || 0) + paid;
+    await user.save();
+    try { await WalletTx.create({ userId, type: 'topup', amount: paid, ref: String(txnId || '') }); } catch (e) {
+      if (e?.code === 11000) return { success: true, duplicate: true, type: 'topup', ref: String(txnId || '') };
+      throw e;
+    }
+    try {
+      const tokenDoc = await PushToken.findOne({ userId });
+      const token = tokenDoc?.token;
+      if (token) {
+        await admin.messaging().send({
+          token,
+          notification: { title: 'Nạp ví thành công', body: `+${paid}đ vào ví` },
+          data: { type: 'wallet_topup', amount: String(paid) },
+          android: { priority: 'high', notification: { channelId: 'general_notifications', priority: 'high' } },
+        });
+      }
+    } catch (_) {}
+    return { success: true, walletTopup: true, via: 'userId', balance: user.viSoDu };
+  }
+
+  // TOPUP by phone
+  const topupByPhone = normalized.match(/TOPUP-?(\+?84|0)?(\d{9,10})/);
+  if (topupByPhone) {
+    const txRef = String(txnId || '').trim();
+    if (txRef) {
+      const exists = await WalletTx.findOne({ type: 'topup', ref: txRef }).lean();
+      if (exists) return { success: true, duplicate: true, type: 'topup', ref: txRef };
+    }
+    const prefix = topupByPhone[1] || '';
+    const digits = topupByPhone[2] || '';
+    let phone = digits;
+    phone = '0' + digits.slice(-9); // normalize to leading 0
+    const paid = parseInt(amount, 10) || 0;
+    const user = await User.findOne({ soDienThoai: phone });
+    if (!user) return { success: true, skipped: true, reason: 'User phone not found', phone };
+    user.viSoDu = (user.viSoDu || 0) + paid;
+    await user.save();
+    try { await WalletTx.create({ userId: user._id, type: 'topup', amount: paid, ref: txRef || '' }); } catch (e) {
+      if (e?.code === 11000) return { success: true, duplicate: true, type: 'topup', ref: txRef };
+      throw e;
+    }
+    try {
+      const tokenDoc = await PushToken.findOne({ userId: user._id });
+      const token = tokenDoc?.token;
+      if (token) {
+        await admin.messaging().send({
+          token,
+          notification: { title: 'Nạp ví thành công', body: `+${paid}đ vào ví` },
+          data: { type: 'wallet_topup', amount: String(paid) },
+          android: { priority: 'high', notification: { channelId: 'general_notifications', priority: 'high' } },
+        });
+      }
+    } catch (_) {}
+    return { success: true, walletTopup: true, via: 'phone', phone, balance: user.viSoDu };
+  }
+
+  // BOOK-<maVe>
+  const match = normalized.match(/BOOK-([A-Z0-9\-]+)/);
+  if (!match) return { success: true, skipped: true, reason: 'No booking code or recognizable TOPUP tag' };
+  const maVe = match[1];
+  const booking = await Booking.findOne({ maVe });
+  if (!booking) return { success: true, skipped: true, reason: 'Booking not found' };
+  if (booking.trangThaiThanhToan === 'da_thanh_toan') return { success: true, alreadyPaid: true };
+  const paid = parseInt(amount, 10) || 0;
+  const expected = parseInt(booking.tongTien, 10) || 0;
+  if (Math.abs(paid - expected) > 2000) return { success: true, skipped: true, reason: 'Amount mismatch' };
+  const txRef = String(txnId || '').trim();
+  if (txRef) {
+    const exists = await WalletTx.findOne({ type: 'payment', ref: txRef }).lean();
+    if (exists) return { success: true, duplicate: true, type: 'payment', ref: txRef };
+  }
+  booking.trangThaiThanhToan = 'da_thanh_toan';
+  booking.paymentMethod = 'bank';
+  booking.paymentRef = txRef.slice(0, 128);
+  booking.paidAt = new Date();
+  await booking.save();
+  try { await WalletTx.create({ userId: booking.userId, type: 'payment', amount: paid, ref: txRef || '' }); } catch (e) {
+    if (e?.code === 11000) return { success: true, duplicate: true, type: 'payment', ref: txRef };
+    throw e;
+  }
+  try {
+    const tokenDoc = await PushToken.findOne({ userId: booking.userId });
+    const token = tokenDoc?.token;
+    if (token) {
+      await admin.messaging().send({
+        token,
+        notification: { title: 'Thanh toán thành công', body: `Vé ${booking.maVe} đã thanh toán` },
+        data: { type: 'booking_paid', bookingId: String(booking._id), maVe },
+        android: { priority: 'high', notification: { channelId: 'general_notifications', priority: 'high' } },
+      });
+    }
+  } catch (_) {}
+  return { success: true, updated: true };
+}
 
 // Simple webhook to auto-confirm bank transfers (e.g., from Casso)
 // Expect body: { description, amount, accountNumber, bankCode, txnId }
@@ -35,95 +165,44 @@ router.post('/webhook/casso', async (req, res) => {
     const normalized = desc.toUpperCase().replace(/\s+/g, '');
     const match = normalized.match(/BOOK-([A-Z0-9\-]+)/);
     if (!match) {
-      // 1) TOPUP-<MongoId>
-      const topupByUserId = normalized.match(/TOPUP-?([A-F0-9]{24})/);
-      if (topupByUserId) {
-        // If we've already processed this txnId as a topup, return idempotent response
-        if (txRef) {
-          const exists = await WalletTx.findOne({ type: 'topup', ref: txRef }).lean();
-          if (exists) return res.json({ success: true, duplicate: true, type: 'topup', ref: txRef });
-        }
-        const userId = topupByUserId[1].toLowerCase();
-        const paid = parseInt(amount, 10) || 0;
-        const user = await User.findById(userId);
-        if (!user) return res.json({ success: true, skipped: true, reason: 'User not found for topup' });
-        user.viSoDu = (user.viSoDu || 0) + paid;
-        await user.save();
-        try {
-          await WalletTx.create({ userId, type: 'topup', amount: paid, ref: txRef || '' });
-        } catch (e) {
-          if (e?.code === 11000) return res.json({ success: true, duplicate: true, type: 'topup', ref: txRef });
-          throw e;
-        }
-        return res.json({ success: true, walletTopup: true, via: 'userId', balance: user.viSoDu });
-      }
+      const r = await processTransactionPayload({ description, amount, accountNumber, bankCode, txnId });
+      return res.json(r);
+    }
+    const r = await processTransactionPayload({ description, amount, accountNumber, bankCode, txnId });
+    return res.json(r);
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+});
 
-      // 2) TOPUP-<phone> (9-11 digits, accepts 0xxxxxxxxx or 84xxxxxxxxx)
-      const topupByPhone = normalized.match(/TOPUP-?(\+?84|0)?(\d{9,10})/);
-      if (topupByPhone) {
-        // If we've already processed this txnId as a topup, return idempotent response
-        if (txRef) {
-          const exists = await WalletTx.findOne({ type: 'topup', ref: txRef }).lean();
-          if (exists) return res.json({ success: true, duplicate: true, type: 'topup', ref: txRef });
-        }
-        const prefix = topupByPhone[1] || '';
-        const digits = topupByPhone[2] || '';
-        // Normalize to leading 0
-        let phone = digits;
-        if (!prefix || prefix === '0') {
-          phone = '0' + digits.slice(-9);
-        } else {
-          // +84 or 84
-          phone = '0' + digits.slice(-9);
-        }
-        const paid = parseInt(amount, 10) || 0;
-        const user = await User.findOne({ soDienThoai: phone });
-        if (!user) return res.json({ success: true, skipped: true, reason: 'User phone not found', phone });
-        user.viSoDu = (user.viSoDu || 0) + paid;
-        await user.save();
-        try {
-          await WalletTx.create({ userId: user._id, type: 'topup', amount: paid, ref: txRef || '' });
-        } catch (e) {
-          if (e?.code === 11000) return res.json({ success: true, duplicate: true, type: 'topup', ref: txRef });
-          throw e;
-        }
-        return res.json({ success: true, walletTopup: true, via: 'phone', phone, balance: user.viSoDu });
-      }
-
-      return res.json({ success: true, skipped: true, reason: 'No booking code or recognizable TOPUP tag' });
+// Manual sync with Casso API (when webhook not available)
+router.post('/casso/sync', async (req, res) => {
+  try {
+    const apiKey = process.env.CASSO_API_KEY || req.body.apiKey;
+    if (!apiKey) return res.status(400).json({ success: false, message: 'Missing CASSO_API_KEY' });
+    const pageSize = parseInt(req.body.pageSize, 10) || 100;
+    const url = `https://oauth.casso.vn/v2/transactions?pageSize=${pageSize}&sort=DESC`;
+    const resp = await fetch(url, { headers: { Authorization: `Apikey ${apiKey}` } });
+    const json = await resp.json();
+    const list = json?.data?.records || json?.data || json?.records || [];
+    let processed = 0, updated = 0, topups = 0, duplicates = 0;
+    for (const t of list) {
+      const payload = {
+        description: t.description || t.content || t.remark || '',
+        amount: t.amount || t.creditAmount || t.debitAmount || 0,
+        accountNumber: t.accountNumber || t.account || '',
+        bankCode: t.bankShortName || t.bankCode || '',
+        txnId: t.id || t.transactionID || t.transactionId || t.reference || '',
+      };
+      try {
+        const r = await processTransactionPayload(payload);
+        processed += 1;
+        if (r.walletTopup) topups += 1;
+        if (r.updated) updated += 1;
+        if (r.duplicate) duplicates += 1;
+      } catch (_) {}
     }
-    const maVe = match[1];
-    const booking = await Booking.findOne({ maVe });
-    if (!booking) {
-      return res.json({ success: true, skipped: true, reason: 'Booking not found' });
-    }
-    if (booking.trangThaiThanhToan === 'da_thanh_toan') {
-      return res.json({ success: true, alreadyPaid: true });
-    }
-    // Amount check (allow small delta)
-    const paid = parseInt(amount, 10) || 0;
-    const expected = parseInt(booking.tongTien, 10) || 0;
-    if (Math.abs(paid - expected) > 2000) {
-      return res.json({ success: true, skipped: true, reason: 'Amount mismatch' });
-    }
-
-    // If this payment txnId was processed already, treat as idempotent
-    if (txRef) {
-      const exists = await WalletTx.findOne({ type: 'payment', ref: txRef }).lean();
-      if (exists) return res.json({ success: true, duplicate: true, type: 'payment', ref: txRef });
-    }
-
-    booking.trangThaiThanhToan = 'da_thanh_toan';
-    booking.paymentMethod = 'bank';
-    booking.paymentRef = txRef.slice(0, 128);
-    booking.paidAt = new Date();
-    await booking.save();
-    try { await WalletTx.create({ userId: booking.userId, type: 'payment', amount: paid, ref: txRef || '' }); } catch (e) {
-      if (e?.code === 11000) return res.json({ success: true, duplicate: true, type: 'payment', ref: txRef });
-      throw e;
-    }
-
-    return res.json({ success: true, updated: true });
+    return res.json({ success: true, processed, updated, topups, duplicates });
   } catch (e) {
     return res.status(500).json({ success: false, message: e.message });
   }
