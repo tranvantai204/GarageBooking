@@ -340,6 +340,44 @@ router.post('/webhook/payos', async (req, res) => {
   }
 });
 
+// ===== Discord sync (read messages in a channel and parse BOOK-/TOPUP-) =====
+router.post('/discord/sync', async (req, res) => {
+  try {
+    const botToken = process.env.DISCORD_BOT_TOKEN || req.body.botToken;
+    const channelId = process.env.DISCORD_CHANNEL_ID || req.body.channelId;
+    if (!botToken || !channelId) {
+      return res.status(400).json({ success: false, message: 'Missing DISCORD_BOT_TOKEN or DISCORD_CHANNEL_ID' });
+    }
+    const limit = Math.min(parseInt(req.body.limit, 10) || 100, 100);
+    const url = `https://discord.com/api/v10/channels/${channelId}/messages?limit=${limit}`;
+    const resp = await fetch(url, { headers: { Authorization: `Bot ${botToken}` } });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      return res.status(400).json({ success: false, message: 'Discord fetch failed', details: txt });
+    }
+    const messages = await resp.json();
+    let processed = 0, updated = 0, topups = 0, duplicates = 0;
+    for (const m of messages) {
+      const content = (m?.content || '').toString();
+      if (!content) continue;
+      // Parse amount: first group of digits (allow separators)
+      const amtMatch = content.replace(/\./g, '').match(/([+]?\d{4,})\s*đ?/i);
+      const amount = amtMatch ? parseInt(amtMatch[1], 10) : 0;
+      const payload = { description: content, amount, txnId: m?.id };
+      try {
+        const r = await processTransactionPayload(payload);
+        processed += 1;
+        if (r.walletTopup) topups += 1;
+        if (r.updated) updated += 1;
+        if (r.duplicate) duplicates += 1;
+      } catch (_) {}
+    }
+    return res.json({ success: true, processed, updated, topups, duplicates });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+});
+
 module.exports = router;
 
 
