@@ -304,6 +304,7 @@ router.post('/payos/create-link', async (req, res) => {
       description: addInfo,
       returnUrl,
       cancelUrl,
+      webhookUrl: process.env.PAYOS_WEBHOOK_URL || undefined,
     };
 
     const resp = await fetch('https://api-merchant.payos.vn/v2/payment-requests', {
@@ -315,9 +316,13 @@ router.post('/payos/create-link', async (req, res) => {
       },
       body: JSON.stringify(payload),
     });
-    const data = await resp.json();
+    const text = await resp.text();
+    let data = {};
+    try { data = JSON.parse(text || '{}'); } catch (_) {}
     const checkoutUrl = data?.data?.checkoutUrl || data?.checkoutUrl;
-    if (!checkoutUrl) return res.status(400).json({ success: false, message: 'PayOS create link failed', data });
+    if (!resp.ok || !checkoutUrl) {
+      return res.status(400).json({ success: false, message: data?.message || 'PayOS create link failed', details: data || text, request: payload });
+    }
     return res.json({ success: true, data: { checkoutUrl, orderCode, addInfo, amount: finalAmount } });
   } catch (e) {
     return res.status(500).json({ success: false, message: e.message });
