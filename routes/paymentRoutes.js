@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const Booking = require('../models/Booking');
 const User = require('../models/User');
 const WalletTx = require('../models/WalletTransaction');
@@ -307,23 +308,79 @@ router.post('/payos/create-link', async (req, res) => {
       webhookUrl: process.env.PAYOS_WEBHOOK_URL || undefined,
     };
 
-    const resp = await fetch('https://api-merchant.payos.vn/v2/payment-requests', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-client-id': clientId,
-        'x-api-key': apiKey,
-      },
-      body: JSON.stringify(payload),
-    });
-    const text = await resp.text();
-    let data = {};
-    try { data = JSON.parse(text || '{}'); } catch (_) {}
-    const checkoutUrl = data?.data?.checkoutUrl || data?.checkoutUrl;
-    if (!resp.ok || !checkoutUrl) {
-      return res.status(400).json({ success: false, message: data?.message || 'PayOS create link failed', details: data || text, request: payload });
+    // Attempt 1: call without signature
+    const endpoint = process.env.PAYOS_API_ENDPOINT || 'https://api-merchant.payos.vn/v2/payment-requests';
+    const callPayos = async (body) => {
+      const r = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-client-id': clientId,
+          'x-api-key': apiKey,
+        },
+        body: JSON.stringify(body),
+      });
+      const raw = await r.text();
+      let json = {};
+      try { json = JSON.parse(raw || '{}'); } catch (_) {}
+      return { ok: r.ok, status: r.status, json, raw };
+    };
+
+    let attempt1 = await callPayos(payload);
+    let checkoutUrl = attempt1.json?.data?.checkoutUrl || attempt1.json?.checkoutUrl;
+    if (attempt1.ok && checkoutUrl) {
+      return res.json({ success: true, data: { checkoutUrl, orderCode, addInfo, amount: finalAmount } });
     }
-    return res.json({ success: true, data: { checkoutUrl, orderCode, addInfo, amount: finalAmount } });
+
+    // Attempt 2: if checksum is configured, try signing with an alternative formula
+    let attempt2 = null;
+    try {
+      const checksumKey = process.env.PAYOS_CHECKSUM_KEY || process.env.PAYOS_CHECKSUM || process.env.CHECKSUM_KEY;
+      if (checksumKey) {
+        const altPayload = { ...payload };
+        const base = `${String(clientId)}|${String(orderCode)}|${String(finalAmount)}|${String(addInfo)}|${String(returnUrl)}|${String(cancelUrl)}|${String(process.env.PAYOS_WEBHOOK_URL || '')}`;
+        altPayload.signature = crypto.createHmac('sha256', checksumKey).update(base).digest('hex');
+        attempt2 = await callPayos(altPayload);
+        checkoutUrl = attempt2.json?.data?.checkoutUrl || attempt2.json?.checkoutUrl;
+        if (attempt2.ok && checkoutUrl) {
+          return res.json({ success: true, data: { checkoutUrl, orderCode, addInfo, amount: finalAmount } });
+        }
+      }
+    } catch (_) {}
+
+    // Both attempts failed
+    return res.status(400).json({
+      success: false,
+      message: (attempt1?.json?.message || attempt2?.json?.message || 'PayOS create link failed'),
+      details: {
+        endpoint,
+        attempt1: { status: attempt1?.status, body: attempt1?.json || attempt1?.raw },
+        attempt2: attempt2 ? { status: attempt2?.status, body: attempt2?.json || attempt2?.raw } : null,
+      },
+      request: payload,
+    });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// Diagnostics: expose presence of envs without leaking secrets
+router.get('/payos/debug', (req, res) => {
+  try {
+    const redact = (v) => (v ? `${String(v).slice(0, 3)}...${String(v).slice(-3)}` : null);
+    return res.json({
+      success: true,
+      data: {
+        hasClientId: !!process.env.PAYOS_CLIENT_ID,
+        hasApiKey: !!process.env.PAYOS_API_KEY,
+        hasChecksum: !!(process.env.PAYOS_CHECKSUM_KEY || process.env.PAYOS_CHECKSUM || process.env.CHECKSUM_KEY),
+        endpoint: process.env.PAYOS_API_ENDPOINT || 'https://api-merchant.payos.vn/v2/payment-requests',
+        sample: {
+          clientId: redact(process.env.PAYOS_CLIENT_ID),
+          apiKey: redact(process.env.PAYOS_API_KEY),
+        },
+      },
+    });
   } catch (e) {
     return res.status(500).json({ success: false, message: e.message });
   }
