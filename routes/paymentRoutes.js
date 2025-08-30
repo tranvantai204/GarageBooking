@@ -187,7 +187,6 @@ router.post('/casso/sync', async (req, res) => {
     const json = await resp.json();
     const list = json?.data?.records || json?.data || json?.records || [];
     let processed = 0, updated = 0, topups = 0, duplicates = 0;
-    const discordUrl = process.env.DISCORD_WEBHOOK_URL;
     for (const t of list) {
       const payload = {
         description: t.description || t.content || t.remark || '',
@@ -202,26 +201,7 @@ router.post('/casso/sync', async (req, res) => {
         if (r.walletTopup) topups += 1;
         if (r.updated) updated += 1;
         if (r.duplicate) duplicates += 1;
-        // Optional: Post to Discord per processed item
-        if (discordUrl) {
-          try {
-            let content = '';
-            if (r.walletTopup) {
-              content = `✅ TOPUP +${payload.amount}đ (${r.via || ''}) txn:${payload.txnId || ''}`;
-            } else if (r.updated) {
-              content = `✅ BOOKING PAID mã vé ${r.maVe || ''} +${payload.amount}đ txn:${payload.txnId || ''}`;
-            } else if (r.duplicate) {
-              content = `⏭️ Bỏ qua giao dịch trùng txn:${payload.txnId || ''}`;
-            }
-            if (content) {
-              await fetch(discordUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content }),
-              });
-            }
-          } catch (_) {}
-        }
+        // trimmed: removed optional Discord posting
       } catch (_) {}
     }
     return res.json({ success: true, processed, updated, topups, duplicates });
@@ -402,43 +382,28 @@ router.post('/webhook/payos', async (req, res) => {
   }
 });
 
-// ===== Discord sync (read messages in a channel and parse BOOK-/TOPUP-) =====
-router.post('/discord/sync', async (req, res) => {
+// Alias: Some configurations expect webhook at /api/payments/payos
+// This endpoint mirrors the logic of /webhook/payos
+router.post('/payos', async (req, res) => {
   try {
-    const botToken = process.env.DISCORD_BOT_TOKEN || req.body.botToken;
-    const channelId = process.env.DISCORD_CHANNEL_ID || req.body.channelId;
-    if (!botToken || !channelId) {
-      return res.status(400).json({ success: false, message: 'Missing DISCORD_BOT_TOKEN or DISCORD_CHANNEL_ID' });
-    }
-    const limit = Math.min(parseInt(req.body.limit, 10) || 100, 100);
-    const url = `https://discord.com/api/v10/channels/${channelId}/messages?limit=${limit}`;
-    const resp = await fetch(url, { headers: { Authorization: `Bot ${botToken}` } });
-    if (!resp.ok) {
-      const txt = await resp.text();
-      return res.status(400).json({ success: false, message: 'Discord fetch failed', details: txt });
-    }
-    const messages = await resp.json();
-    let processed = 0, updated = 0, topups = 0, duplicates = 0;
-    for (const m of messages) {
-      const content = (m?.content || '').toString();
-      if (!content) continue;
-      // Parse amount: first group of digits (allow separators)
-      const amtMatch = content.replace(/\./g, '').match(/([+]?\d{4,})\s*đ?/i);
-      const amount = amtMatch ? parseInt(amtMatch[1], 10) : 0;
-      const payload = { description: content, amount, txnId: m?.id };
-      try {
-        const r = await processTransactionPayload(payload);
-        processed += 1;
-        if (r.walletTopup) topups += 1;
-        if (r.updated) updated += 1;
-        if (r.duplicate) duplicates += 1;
-      } catch (_) {}
-    }
-    return res.json({ success: true, processed, updated, topups, duplicates });
+    const body = req.body || {};
+    const data = body.data || body;
+    const description = data.description || data.orderDescription || '';
+    const amount = data.amount || data.orderAmount || 0;
+    const txnId = data.orderCode || data.id || '';
+    const r = await processTransactionPayload({ description, amount, txnId });
+    return res.json({ success: true, handled: r });
   } catch (e) {
     return res.status(500).json({ success: false, message: e.message });
   }
 });
+
+// Health hint for providers that validate webhook by GET
+router.get('/payos', (req, res) => {
+  return res.status(200).json({ success: true, message: 'PayOS webhook is alive. Use POST to deliver events.' });
+});
+
+// trimmed: removed Discord sync route for simplicity
 
 module.exports = router;
 

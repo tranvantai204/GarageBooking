@@ -1,0 +1,20 @@
+{
+  "name": "payos-express-integration",
+  "version": "1.0.0",
+  "description": "Minimal Express + PayOS integration (webhook + create payment link)",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "@payos/node": "^0.2.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
+
+
