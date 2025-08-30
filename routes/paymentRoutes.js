@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
+const PayOS = require('@payos/node');
 const Booking = require('../models/Booking');
 const User = require('../models/User');
 const WalletTx = require('../models/WalletTransaction');
@@ -257,6 +258,7 @@ router.post('/payos/create-link', async (req, res) => {
   try {
     const clientId = process.env.PAYOS_CLIENT_ID;
     const apiKey = process.env.PAYOS_API_KEY;
+    const checksum = process.env.PAYOS_CHECKSUM_KEY || process.env.PAYOS_CHECKSUM || process.env.CHECKSUM_KEY;
     if (!clientId || !apiKey) return res.status(400).json({ success: false, message: 'Missing PAYOS_CLIENT_ID or PAYOS_API_KEY' });
 
     const { type = 'booking', bookingId, userId, amount } = req.body || {};
@@ -279,6 +281,8 @@ router.post('/payos/create-link', async (req, res) => {
     const returnUrl = process.env.PAYOS_RETURN_URL || 'https://garagebooking.onrender.com/payos/return';
     const cancelUrl = process.env.PAYOS_CANCEL_URL || 'https://garagebooking.onrender.com/payos/cancel';
 
+    // Use SDK for consistency
+    const payos = new PayOS(clientId, apiKey, checksum || '');
     const payload = {
       orderCode,
       amount: finalAmount,
@@ -286,59 +290,16 @@ router.post('/payos/create-link', async (req, res) => {
       returnUrl,
       cancelUrl,
       webhookUrl: process.env.PAYOS_WEBHOOK_URL || undefined,
+      buyerName: req.body.buyerName,
+      buyerEmail: req.body.buyerEmail,
+      buyerPhone: req.body.buyerPhone,
     };
-
-    // Attempt 1: call without signature
-    const endpoint = process.env.PAYOS_API_ENDPOINT || 'https://api-merchant.payos.vn/v2/payment-requests';
-    const callPayos = async (body) => {
-      const r = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-client-id': clientId,
-          'x-api-key': apiKey,
-        },
-        body: JSON.stringify(body),
-      });
-      const raw = await r.text();
-      let json = {};
-      try { json = JSON.parse(raw || '{}'); } catch (_) {}
-      return { ok: r.ok, status: r.status, json, raw };
-    };
-
-    let attempt1 = await callPayos(payload);
-    let checkoutUrl = attempt1.json?.data?.checkoutUrl || attempt1.json?.checkoutUrl;
-    if (attempt1.ok && checkoutUrl) {
-      return res.json({ success: true, data: { checkoutUrl, orderCode, addInfo, amount: finalAmount } });
+    const resp = await payos.createPaymentLink(payload);
+    const checkoutUrl = resp?.data?.checkoutUrl || resp?.checkoutUrl;
+    if (!checkoutUrl) {
+      return res.status(400).json({ success: false, message: resp?.message || 'PayOS create link failed', details: resp, request: payload });
     }
-
-    // Attempt 2: if checksum is configured, try signing with an alternative formula
-    let attempt2 = null;
-    try {
-      const checksumKey = process.env.PAYOS_CHECKSUM_KEY || process.env.PAYOS_CHECKSUM || process.env.CHECKSUM_KEY;
-      if (checksumKey) {
-        const altPayload = { ...payload };
-        const base = `${String(clientId)}|${String(orderCode)}|${String(finalAmount)}|${String(addInfo)}|${String(returnUrl)}|${String(cancelUrl)}|${String(process.env.PAYOS_WEBHOOK_URL || '')}`;
-        altPayload.signature = crypto.createHmac('sha256', checksumKey).update(base).digest('hex');
-        attempt2 = await callPayos(altPayload);
-        checkoutUrl = attempt2.json?.data?.checkoutUrl || attempt2.json?.checkoutUrl;
-        if (attempt2.ok && checkoutUrl) {
-          return res.json({ success: true, data: { checkoutUrl, orderCode, addInfo, amount: finalAmount } });
-        }
-      }
-    } catch (_) {}
-
-    // Both attempts failed
-    return res.status(400).json({
-      success: false,
-      message: (attempt1?.json?.message || attempt2?.json?.message || 'PayOS create link failed'),
-      details: {
-        endpoint,
-        attempt1: { status: attempt1?.status, body: attempt1?.json || attempt1?.raw },
-        attempt2: attempt2 ? { status: attempt2?.status, body: attempt2?.json || attempt2?.raw } : null,
-      },
-      request: payload,
-    });
+    return res.json({ success: true, data: { checkoutUrl, orderCode, addInfo, amount: finalAmount } });
   } catch (e) {
     return res.status(500).json({ success: false, message: e.message });
   }
@@ -369,8 +330,20 @@ router.get('/payos/debug', (req, res) => {
 // PayOS webhook (simplified)
 router.post('/webhook/payos', async (req, res) => {
   try {
-    // In practice, verify signature/checksum from headers. Here we process safely by description/orderCode
+    // Verify via SDK if env configured
     const body = req.body || {};
+    try {
+      const clientId = process.env.PAYOS_CLIENT_ID;
+      const apiKey = process.env.PAYOS_API_KEY;
+      const checksum = process.env.PAYOS_CHECKSUM_KEY || process.env.PAYOS_CHECKSUM || process.env.CHECKSUM_KEY;
+      if (clientId && apiKey && checksum) {
+        const payos = new PayOS(clientId, apiKey, checksum);
+        if (typeof payos.webhooks?.verify === 'function') {
+          payos.webhooks.verify(body);
+        }
+      }
+    } catch (_) {}
+
     const data = body.data || body;
     const description = data.description || data.orderDescription || '';
     const amount = data.amount || data.orderAmount || 0;
