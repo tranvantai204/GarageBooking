@@ -1,7 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const PayOS = require('@payos/node').default;
+// Robust import for different @payos/node versions/exports
+let _PayOSLib = {};
+try { _PayOSLib = require('@payos/node'); } catch (_) { _PayOSLib = {}; }
+const PayOS = _PayOSLib?.default || _PayOSLib?.PayOS || _PayOSLib;
 const Booking = require('../models/Booking');
 const User = require('../models/User');
 const WalletTx = require('../models/WalletTransaction');
