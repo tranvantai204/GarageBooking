@@ -284,8 +284,7 @@ router.post('/payos/create-link', async (req, res) => {
     const returnUrl = process.env.PAYOS_RETURN_URL || 'https://garagebooking.onrender.com/payos/return';
     const cancelUrl = process.env.PAYOS_CANCEL_URL || 'https://garagebooking.onrender.com/payos/cancel';
 
-    // Use SDK for consistency
-    const payos = new PayOS(clientId, apiKey, checksum || '');
+    // Build payload
     const payload = {
       orderCode,
       amount: finalAmount,
@@ -297,10 +296,34 @@ router.post('/payos/create-link', async (req, res) => {
       buyerEmail: req.body.buyerEmail,
       buyerPhone: req.body.buyerPhone,
     };
-    const resp = await payos.createPaymentLink(payload);
-    const checkoutUrl = resp?.data?.checkoutUrl || resp?.checkoutUrl;
+    // Prefer SDK if available; otherwise fallback to direct HTTP
+    let checkoutUrl = null;
+    try {
+      const instance = new PayOS(clientId, apiKey, checksum || '');
+      if (instance && typeof instance.createPaymentLink === 'function') {
+        const resp = await instance.createPaymentLink(payload);
+        checkoutUrl = resp?.data?.checkoutUrl || resp?.checkoutUrl || null;
+      }
+    } catch (_) {}
+
     if (!checkoutUrl) {
-      return res.status(400).json({ success: false, message: resp?.message || 'PayOS create link failed', details: resp, request: payload });
+      const endpoint = 'https://api-merchant.payos.vn/v2/payment-requests';
+      const httpResp = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-client-id': clientId,
+          'x-api-key': apiKey,
+        },
+        body: JSON.stringify(payload),
+      });
+      const raw = await httpResp.text();
+      let data = {};
+      try { data = JSON.parse(raw || '{}'); } catch (_) {}
+      checkoutUrl = data?.data?.checkoutUrl || data?.checkoutUrl || null;
+      if (!httpResp.ok || !checkoutUrl) {
+        return res.status(400).json({ success: false, message: data?.message || 'PayOS create link failed', details: data || raw, request: payload });
+      }
     }
     return res.json({ success: true, data: { checkoutUrl, orderCode, addInfo, amount: finalAmount } });
   } catch (e) {
