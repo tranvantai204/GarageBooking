@@ -307,7 +307,9 @@ router.post('/payos/create-link', async (req, res) => {
     } catch (_) {}
 
     if (!checkoutUrl) {
-      const endpoint = 'https://api-merchant.payos.vn/v2/payment-requests';
+      const endpoint = process.env.PAYOS_API_ENDPOINT || (String(process.env.PAYOS_ENV).toLowerCase() === 'sandbox'
+        ? 'https://api-sandbox.payos.vn/v2/payment-requests'
+        : 'https://api-merchant.payos.vn/v2/payment-requests');
       const httpResp = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -322,6 +324,7 @@ router.post('/payos/create-link', async (req, res) => {
       try { data = JSON.parse(raw || '{}'); } catch (_) {}
       checkoutUrl = data?.data?.checkoutUrl || data?.checkoutUrl || null;
       if (!httpResp.ok || !checkoutUrl) {
+        try { console.error('PayOS create-link failed', { status: httpResp.status, endpoint, data: data || raw }); } catch (_) {}
         return res.status(400).json({ success: false, message: data?.message || 'PayOS create link failed', details: data || raw, request: payload });
       }
     }
