@@ -297,7 +297,7 @@ router.post('/payos/create-link', async (req, res) => {
       buyerEmail: req.body.buyerEmail || 'customer@example.com',
       buyerPhone: req.body.buyerPhone || '0900000000',
     };
-    // Prefer SDK if available; otherwise fallback to direct HTTP
+    // Prefer SDK if available; otherwise fallback to direct HTTP (with signature attempts)
     let checkoutUrl = null;
     try {
       const instance = new PayOS(clientId, apiKey, checksum || '');
@@ -311,22 +311,49 @@ router.post('/payos/create-link', async (req, res) => {
       const endpoint = process.env.PAYOS_API_ENDPOINT || (String(process.env.PAYOS_ENV).toLowerCase() === 'sandbox'
         ? 'https://api-sandbox.payos.vn/v2/payment-requests'
         : 'https://api-merchant.payos.vn/v2/payment-requests');
-      const httpResp = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-client-id': clientId,
-          'x-api-key': apiKey,
-        },
-        body: JSON.stringify(payload),
-      });
-      const raw = await httpResp.text();
-      let data = {};
-      try { data = JSON.parse(raw || '{}'); } catch (_) {}
-      checkoutUrl = data?.data?.checkoutUrl || data?.checkoutUrl || null;
-      if (!httpResp.ok || !checkoutUrl) {
-        try { console.error('PayOS create-link failed', { status: httpResp.status, endpoint, data: data || raw }); } catch (_) {}
-        return res.status(400).json({ success: false, message: data?.message || 'PayOS create link failed', details: data || raw, request: payload });
+      const sendReq = async (body) => {
+        const r = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-client-id': clientId,
+            'x-api-key': apiKey,
+          },
+          body: JSON.stringify(body),
+        });
+        const raw = await r.text();
+        let json = {}; try { json = JSON.parse(raw || '{}'); } catch (_) {}
+        return { ok: r.ok, status: r.status, json, raw };
+      };
+
+      // Attempt 1: plain
+      let attempt = await sendReq(payload);
+      checkoutUrl = attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl || null;
+      if (!attempt.ok || !checkoutUrl) {
+        // Attempt 2: signature v1 (orderCode+amount+description+returnUrl+cancelUrl)
+        try {
+          if (checksum) {
+            const sigBase1 = `${orderCode}${finalAmount}${addInfo}${returnUrl}${cancelUrl}`;
+            const signed1 = { ...payload, signature: crypto.createHmac('sha256', checksum).update(sigBase1).digest('hex') };
+            attempt = await sendReq(signed1);
+            checkoutUrl = attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl || null;
+          }
+        } catch (_) {}
+      }
+
+      if ((!attempt.ok || !checkoutUrl) && checksum) {
+        // Attempt 3: signature v2 (clientId|orderCode|amount|description|returnUrl|cancelUrl|webhookUrl)
+        try {
+          const sigBase2 = `${String(clientId)}|${String(orderCode)}|${String(finalAmount)}|${String(addInfo)}|${String(returnUrl)}|${String(cancelUrl)}|${String(process.env.PAYOS_WEBHOOK_URL || '')}`;
+          const signed2 = { ...payload, signature: crypto.createHmac('sha256', checksum).update(sigBase2).digest('hex') };
+          attempt = await sendReq(signed2);
+          checkoutUrl = attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl || null;
+        } catch (_) {}
+      }
+
+      if (!attempt.ok || !checkoutUrl) {
+        try { console.error('PayOS create-link failed', { status: attempt.status, endpoint, data: attempt.json || attempt.raw }); } catch (_) {}
+        return res.status(400).json({ success: false, message: attempt.json?.message || 'PayOS create link failed', details: attempt.json || attempt.raw, request: payload });
       }
     }
     return res.json({ success: true, data: { checkoutUrl, orderCode, addInfo, amount: finalAmount } });
