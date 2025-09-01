@@ -280,21 +280,22 @@ router.post('/payos/create-link', async (req, res) => {
       if (!finalAmount) finalAmount = 0;
     }
 
-    const orderCode = Date.now();
+    // Use shorter numeric orderCode (<= 9 digits) to satisfy some gateway constraints
+    const orderCode = Number(String(Date.now()).slice(-9));
     const returnUrl = process.env.PAYOS_RETURN_URL || 'https://garagebooking.onrender.com/payos/return';
     const cancelUrl = process.env.PAYOS_CANCEL_URL || 'https://garagebooking.onrender.com/payos/cancel';
 
     // Build payload
     const payload = {
       orderCode,
-      amount: finalAmount,
+      amount: Number(finalAmount),
       description: addInfo,
       returnUrl,
       cancelUrl,
       webhookUrl: process.env.PAYOS_WEBHOOK_URL || undefined,
-      buyerName: req.body.buyerName,
-      buyerEmail: req.body.buyerEmail,
-      buyerPhone: req.body.buyerPhone,
+      buyerName: req.body.buyerName || 'Khach hang',
+      buyerEmail: req.body.buyerEmail || 'customer@example.com',
+      buyerPhone: req.body.buyerPhone || '0900000000',
     };
     // Prefer SDK if available; otherwise fallback to direct HTTP
     let checkoutUrl = null;
@@ -329,6 +330,61 @@ router.post('/payos/create-link', async (req, res) => {
       }
     }
     return res.json({ success: true, data: { checkoutUrl, orderCode, addInfo, amount: finalAmount } });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// Quick test to verify PayOS connectivity without booking/user context
+router.post('/payos/test', async (req, res) => {
+  try {
+    const clientId = process.env.PAYOS_CLIENT_ID;
+    const apiKey = process.env.PAYOS_API_KEY;
+    const checksum = process.env.PAYOS_CHECKSUM_KEY || process.env.PAYOS_CHECKSUM || process.env.CHECKSUM_KEY;
+    if (!clientId || !apiKey) return res.status(400).json({ success: false, message: 'Missing PAYOS_CLIENT_ID or PAYOS_API_KEY' });
+
+    const amount = parseInt(req.body?.amount, 10) || 10000;
+    const orderCode = Date.now();
+    const returnUrl = process.env.PAYOS_RETURN_URL || 'https://garagebooking.onrender.com/payos/return';
+    const cancelUrl = process.env.PAYOS_CANCEL_URL || 'https://garagebooking.onrender.com/payos/cancel';
+    const description = `TEST-${orderCode}`;
+
+    const payload = { orderCode, amount, description, returnUrl, cancelUrl };
+
+    // Try SDK first
+    let checkoutUrl = null;
+    try {
+      const instance = new PayOS(clientId, apiKey, checksum || '');
+      if (instance && typeof instance.createPaymentLink === 'function') {
+        const resp = await instance.createPaymentLink(payload);
+        checkoutUrl = resp?.data?.checkoutUrl || resp?.checkoutUrl || null;
+      }
+    } catch (_) {}
+
+    // Fallback HTTP
+    if (!checkoutUrl) {
+      const endpoint = process.env.PAYOS_API_ENDPOINT || (String(process.env.PAYOS_ENV).toLowerCase() === 'sandbox'
+        ? 'https://api-sandbox.payos.vn/v2/payment-requests'
+        : 'https://api-merchant.payos.vn/v2/payment-requests');
+      const httpResp = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-client-id': clientId,
+          'x-api-key': apiKey,
+        },
+        body: JSON.stringify(payload),
+      });
+      const raw = await httpResp.text();
+      let data = {};
+      try { data = JSON.parse(raw || '{}'); } catch (_) {}
+      checkoutUrl = data?.data?.checkoutUrl || data?.checkoutUrl || null;
+      if (!httpResp.ok || !checkoutUrl) {
+        return res.status(400).json({ success: false, message: data?.message || 'PayOS create link failed', details: { status: httpResp.status, endpoint, body: data || raw }, request: payload });
+      }
+    }
+
+    return res.json({ success: true, data: { checkoutUrl, orderCode, amount } });
   } catch (e) {
     return res.status(500).json({ success: false, message: e.message });
   }
