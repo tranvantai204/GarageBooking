@@ -280,7 +280,7 @@ router.post('/payos/create-link', async (req, res) => {
       if (!finalAmount) finalAmount = 0;
     }
 
-    // Use shorter numeric orderCode (<= 9 digits) to satisfy some gateway constraints
+    // Use shorter numeric orderCode (<= 9 digits) and ensure unique per request
     const orderCode = Number(String(Date.now()).slice(-9));
     const returnUrl = process.env.PAYOS_RETURN_URL || 'https://garagebooking.onrender.com/payos/return';
     const cancelUrl = process.env.PAYOS_CANCEL_URL || 'https://garagebooking.onrender.com/payos/cancel';
@@ -289,10 +289,9 @@ router.post('/payos/create-link', async (req, res) => {
     const payload = {
       orderCode,
       amount: Number(finalAmount),
-      description: addInfo,
+      description: String(addInfo || '').slice(0, 90),
       returnUrl,
       cancelUrl,
-      webhookUrl: process.env.PAYOS_WEBHOOK_URL || undefined,
       buyerName: req.body.buyerName || 'Khach hang',
       buyerEmail: req.body.buyerEmail || 'customer@example.com',
       buyerPhone: req.body.buyerPhone || '0900000000',
@@ -318,6 +317,7 @@ router.post('/payos/create-link', async (req, res) => {
             'Content-Type': 'application/json',
             'x-client-id': clientId,
             'x-api-key': apiKey,
+            'Accept': 'application/json',
           },
           body: JSON.stringify(body),
         });
