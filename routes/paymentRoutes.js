@@ -298,7 +298,7 @@ router.post('/payos/create-link', async (req, res) => {
       buyerEmail: req.body.buyerEmail || 'customer@example.com',
       buyerPhone: req.body.buyerPhone || '0900000000',
     };
-    // Always sign per PayOS requirement (code 201 indicates signature required)
+    // Send plain payload first (per official sample)
     let checkoutUrl = null;
     {
       const endpoint = process.env.PAYOS_API_ENDPOINT || (String(process.env.PAYOS_ENV).toLowerCase() === 'sandbox'
@@ -319,31 +319,27 @@ router.post('/payos/create-link', async (req, res) => {
         let json = {}; try { json = JSON.parse(raw || '{}'); } catch (_) {}
         return { ok: r.ok, status: r.status, json, raw };
       };
-      if (!checksum) {
-        return res.status(400).json({ success: false, message: 'Missing PAYOS_CHECKSUM_KEY for signature' });
-      }
-      // Try signature v1 (no webhook in base)
-      const baseV1 = `${orderCode}${Number(finalAmount)}${String(addInfo || '')}${returnUrl}${cancelUrl}`;
-      const sigV1 = crypto.createHmac('sha256', checksum).update(baseV1).digest('hex');
-      let attempt = await sendReq({ ...payload, signature: sigV1 });
+      // Attempt 0: plain (no signature)
+      let attempt = await sendReq({ ...payload });
       checkoutUrl = attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl || null;
-      if (!attempt.ok || !checkoutUrl) {
-        // Try signature v1.1 (include webhookUrl at the end)
-        try {
-          const baseV11 = `${orderCode}${Number(finalAmount)}${String(addInfo || '')}${returnUrl}${cancelUrl}${webhookUrl}`;
-          const sigV11 = crypto.createHmac('sha256', checksum).update(baseV11).digest('hex');
-          attempt = await sendReq({ ...payload, signature: sigV11 });
-          checkoutUrl = attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl || null;
-        } catch (_) {}
-      }
-      if (!attempt.ok || !checkoutUrl) {
-        // Try signature v2 (clientId|orderCode|amount|description|returnUrl|cancelUrl|webhookUrl)
-        try {
-          const baseV2 = `${String(clientId)}|${String(orderCode)}|${String(Number(finalAmount))}|${String(addInfo || '')}|${String(returnUrl)}|${String(cancelUrl)}|${String(webhookUrl)}`;
-          const sigV2 = crypto.createHmac('sha256', checksum).update(baseV2).digest('hex');
-          attempt = await sendReq({ ...payload, signature: sigV2 });
-          checkoutUrl = attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl || null;
-        } catch (_) {}
+      // If provider insists on signature (rare), and we have checksum, try fallbacks
+      if ((!attempt.ok || !checkoutUrl) && (attempt.json?.code === '201' || /signature/i.test(String(attempt.json?.desc || '')))) {
+        if (checksum) {
+          try {
+            const baseV1 = `${orderCode}${Number(finalAmount)}${String(addInfo || '')}${returnUrl}${cancelUrl}`;
+            const sigV1 = crypto.createHmac('sha256', checksum).update(baseV1).digest('hex');
+            attempt = await sendReq({ ...payload, signature: sigV1 });
+            checkoutUrl = attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl || null;
+          } catch (_) {}
+          if ((!attempt.ok || !checkoutUrl)) {
+            try {
+              const baseV2 = `${String(clientId)}|${String(orderCode)}|${String(Number(finalAmount))}|${String(addInfo || '')}|${String(returnUrl)}|${String(cancelUrl)}|${String(webhookUrl)}`;
+              const sigV2 = crypto.createHmac('sha256', checksum).update(baseV2).digest('hex');
+              attempt = await sendReq({ ...payload, signature: sigV2 });
+              checkoutUrl = attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl || null;
+            } catch (_) {}
+          }
+        }
       }
       if (!attempt.ok || !checkoutUrl) {
         try { console.error('PayOS create-link failed', { status: attempt.status, endpoint, data: attempt.json || attempt.raw, attempts: ['v1','v1.1','v2'] }); } catch (_) {}
