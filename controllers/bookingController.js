@@ -350,3 +350,69 @@ exports.getTripPassengers = async (req, res) => {
         res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
     }
 }
+
+// @desc    Lấy thông tin vé theo mã (để hiển thị tên khách, ghế, trạng thái thanh toán)
+// @route   GET /api/bookings/by-code/:code
+// @access  Private (driver/admin)
+exports.getBookingByCode = async (req, res) => {
+  try {
+    const { code } = req.params;
+    if (!code) return res.status(400).json({ success: false, message: 'Thiếu mã vé' });
+
+    const booking = await Booking.findOne({ maVe: code })
+      .populate('userId', 'hoTen soDienThoai')
+      .populate('tripId', 'diemDi diemDen thoiGianKhoiHanh');
+    if (!booking) return res.status(404).json({ success: false, message: 'Không tìm thấy vé' });
+
+    // Role check (driver/admin)
+    const isAdmin = req.user?.vaiTro === 'admin';
+    const isDriver = req.user?.vaiTro === 'tai_xe' || req.user?.vaiTro === 'driver';
+    if (!(isAdmin || isDriver || String(booking.userId._id) === String(req.user._id))) {
+      return res.status(403).json({ success: false, message: 'Không có quyền xem vé này' });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        _id: booking._id,
+        code: booking.maVe,
+        user: booking.userId ? { _id: booking.userId._id, hoTen: booking.userId.hoTen, soDienThoai: booking.userId.soDienThoai } : null,
+        danhSachGhe: booking.danhSachGhe,
+        trangThaiThanhToan: booking.trangThaiThanhToan,
+        paymentMethod: booking.paymentMethod,
+        tongTien: booking.tongTien,
+        trip: booking.tripId,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+  }
+};
+
+// @desc    Xác nhận thanh toán tiền mặt theo mã vé (dành cho tài xế/admin)
+// @route   POST /api/bookings/cash-confirm
+// @access  Private (driver/admin)
+exports.cashConfirmBooking = async (req, res) => {
+  try {
+    const { code } = req.body || {};
+    if (!code) return res.status(400).json({ success: false, message: 'Thiếu mã vé' });
+
+    const isAdmin = req.user?.vaiTro === 'admin';
+    const isDriver = req.user?.vaiTro === 'tai_xe' || req.user?.vaiTro === 'driver';
+    if (!(isAdmin || isDriver)) {
+      return res.status(403).json({ success: false, message: 'Chỉ tài xế hoặc admin mới được xác nhận tiền mặt' });
+    }
+
+    const booking = await Booking.findOne({ maVe: code });
+    if (!booking) return res.status(404).json({ success: false, message: 'Không tìm thấy vé' });
+
+    booking.trangThaiThanhToan = 'da_thanh_toan';
+    booking.paymentMethod = 'cash';
+    booking.paidAt = new Date();
+    await booking.save();
+
+    return res.json({ success: true, message: 'Đã xác nhận thanh toán tiền mặt', data: booking });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+  }
+};

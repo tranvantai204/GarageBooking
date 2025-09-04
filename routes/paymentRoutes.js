@@ -186,6 +186,11 @@ router.post('/webhook/casso', async (req, res) => {
   }
 });
 
+// Health hint for providers/services that validate webhook by GET
+router.get('/casso', (req, res) => {
+  return res.status(200).json({ success: true, message: 'Casso webhook is alive. Use POST /api/payments/webhook/casso to deliver events.' });
+});
+
 // Manual sync with Casso API (when webhook not available)
 router.post('/casso/sync', async (req, res) => {
   try {
