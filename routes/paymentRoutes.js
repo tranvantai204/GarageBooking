@@ -131,7 +131,7 @@ async function processTransactionPayload(payload) {
     }
   }
 
-  if (!maVe && !orderCode) return { success: true, skipped: true, reason: 'No booking code or recognizable TOPUP tag' };
+  if (!maVe && !orderCode) return { success: true, skipped: true, reason: `No booking code in description: ${desc.slice(0,120)}` };
 
   if (orderCode) {
     // Map từ orderCode → booking nếu có PaymentRequest (tuỳ hệ thống)
@@ -146,7 +146,7 @@ async function processTransactionPayload(payload) {
 
   if (!maVe) return { success: true, skipped: true, reason: 'Cannot resolve booking' };
   const booking = await Booking.findOne({ maVe });
-  if (!booking) return { success: true, skipped: true, reason: 'Booking not found' };
+  if (!booking) return { success: true, skipped: true, reason: `Booking ${maVe} not found` };
   if (booking.trangThaiThanhToan === 'da_thanh_toan') return { success: true, alreadyPaid: true };
   const paid = parseInt(amount, 10) || 0;
   const expected = parseInt(booking.tongTien, 10) || 0;
@@ -196,7 +196,15 @@ router.post('/webhook/casso', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid secret' });
     }
 
-    const { description = '', amount, accountNumber, bankCode, txnId } = req.body || {};
+    const raw = req.body || {};
+    const data = raw.data || raw;
+    const description = String(
+      data.description || data.content || data.remark || data.memo || ''
+    );
+    const amount = data.amount || data.creditAmount || data.transactionAmount || data.orderAmount || 0;
+    const accountNumber = data.accountNumber || data.account || data.accountNo || '';
+    const bankCode = data.bankShortName || data.bankCode || '';
+    const txnId = data.id || data.transactionID || data.transactionId || data.reference || '';
     if (!description && typeof req.body === 'string') {
       try {
         const parsed = JSON.parse(req.body);
