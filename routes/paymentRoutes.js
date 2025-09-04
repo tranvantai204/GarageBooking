@@ -240,10 +240,7 @@ router.post('/qr', async (req, res) => {
         if (!finalAmount) finalAmount = parseInt(booking.tongTien, 10) || 0;
       } else {
         // Cho phép tạo link không có bookingId nếu đã truyền đủ amount + description
-        if (!finalAmount || finalAmount <= 0 || !req.body.description) {
-          return res.status(400).json({ success: false, message: 'Thiếu bookingId hoặc amount+description' });
-        }
-        addInfo = String(req.body.description);
+        addInfo = String(req.body.description || 'Thanh toan');
       }
     } else {
       const uid = String(userId || req.user?._id || '');
