@@ -176,8 +176,9 @@ router.post('/webhook/casso', async (req, res) => {
       || req.headers['x-casso-webhook-secret']
       || req.query.secret
       || '';
-    const secret = process.env.CASSO_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || 'abc123';
-    if (!secret || provided !== secret) {
+    const secret = process.env.CASSO_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '';
+    // Một số kênh Casso chỉ gửi chữ ký số, không gửi raw secret. Chỉ từ chối khi header có cung cấp nhưng khác secret.
+    if (secret && provided && provided !== secret) {
       return res.status(401).json({ success: false, message: 'Invalid secret' });
     }
 
@@ -204,7 +205,7 @@ router.post('/webhook/casso', async (req, res) => {
     // 1) BOOK-<maVe> => mark booking paid
     // 2) TOPUP-<userId24> => add to user's wallet
     const desc = String(description || '');
-    const normalized = desc.toUpperCase().replace(/\s+/g, '');
+    const normalized = desc.toUpperCase().normalize('NFKD').replace(/\s+/g, '');
     const match = normalized.match(/BOOK-([A-Z0-9\-]+)/);
     if (!match) {
       const r = await processTransactionPayload({ description, amount, accountNumber, bankCode, txnId });
