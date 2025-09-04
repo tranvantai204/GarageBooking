@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const axios = require('axios');
 const https = require('https');
 const dns = require('dns');
+try { dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']); } catch (_) {}
 const { URL } = require('url');
 // Robust import for different @payos/node versions/exports
 let _PayOSLib = {};
