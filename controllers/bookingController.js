@@ -206,13 +206,40 @@ exports.checkInBooking = async (req, res) => {
             }
         }
 
+        // 1.1 Chuẩn hóa/khôi phục maVe từ nhiều định dạng khác nhau
+        let maVeStr = String(parsedData.maVe || '').trim();
+        if (!maVeStr) {
+            const rawStr = typeof qrData === 'string' ? qrData : JSON.stringify(parsedData);
+            const normalized = String(rawStr || '').toUpperCase().replace(/\s+/g, '');
+            let m = normalized.match(/HAPHUONG-?([0-9]{6,20})/);
+            if (!m) {
+                const m2 = normalized.match(/BOOKHAPHUONG-?([0-9]{6,20})/);
+                if (m2) m = m2;
+            }
+            if (m) {
+                maVeStr = `HAPHUONG-${m[1]}`;
+            }
+        }
+
+        if (!maVeStr) {
+            return res.status(400).json({ success: false, message: 'Không tìm thấy mã vé trong QR' });
+        }
+
         // 2. Tìm booking theo mã vé
-        const booking = await Booking.findOne({ maVe: parsedData.maVe })
+        // Thử tìm theo maVe chuẩn hóa (có '-') rồi fallback không '-'
+        let booking = await Booking.findOne({ maVe: maVeStr })
             .populate('tripId', 'diemDi diemDen thoiGianKhoiHanh taiXe')
             .populate('userId', 'hoTen soDienThoai');
 
+        if (!booking && maVeStr.includes('HAPHUONG-')) {
+            const alt = maVeStr.replace('HAPHUONG-', 'HAPHUONG');
+            booking = await Booking.findOne({ maVe: alt })
+                .populate('tripId', 'diemDi diemDen thoiGianKhoiHanh taiXe')
+                .populate('userId', 'hoTen soDienThoai');
+        }
+
         if (!booking) {
-            return res.status(404).json({ success: false, message: 'Không tìm thấy vé' });
+            return res.status(404).json({ success: false, message: `Không tìm thấy vé: ${maVeStr}` });
         }
 
         // 3. Kiểm tra quyền (chỉ tài xế của chuyến đi hoặc admin)
