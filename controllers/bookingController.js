@@ -252,10 +252,12 @@ exports.checkInBooking = async (req, res) => {
             return res.status(404).json({ success: false, message: `Không tìm thấy vé: ${maVeStr}` });
         }
 
-        // 3. Kiểm tra quyền (chỉ tài xế của chuyến đi hoặc admin)
-        if (req.user.vaiTro !== 'admin' &&
-            req.user.vaiTro !== 'tai_xe') {
-            return res.status(403).json({ success: false, message: 'Không có quyền check-in' });
+        // 3. Kiểm tra quyền: admin hoặc tài xế. Cho phép cả role 'driver' và 'tai_xe'
+        const role = String(req.user.vaiTro || req.user.role || '').toLowerCase();
+        const isAdmin = role === 'admin';
+        const isDriver = role === 'tai_xe' || role === 'driver';
+        if (!(isAdmin || isDriver)) {
+            return res.status(403).json({ success: false, message: `Không có quyền check-in (role=${role})` });
         }
 
         // 4. Kiểm tra xem vé đã check-in chưa
