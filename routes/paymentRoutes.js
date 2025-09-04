@@ -11,6 +11,7 @@ let _PayOSLib = {};
 try { _PayOSLib = require('@payos/node'); } catch (_) { _PayOSLib = {}; }
 const PayOS = _PayOSLib?.default || _PayOSLib?.PayOS || _PayOSLib;
 const Booking = require('../models/Booking');
+const PaymentRequest = require('../models/PaymentRequest');
 const User = require('../models/User');
 const WalletTx = require('../models/WalletTransaction');
 const PushToken = require('../models/PushToken');
@@ -290,7 +291,7 @@ router.post('/payos/create-link', async (req, res) => {
     const returnUrl = process.env.PAYOS_RETURN_URL || 'https://garagebooking.onrender.com/payos/return';
     const cancelUrl = process.env.PAYOS_CANCEL_URL || 'https://garagebooking.onrender.com/payos/cancel';
 
-    // Build payload theo mẫu chính thức của PayOS
+    // Build payload theo mẫu chính thức của PayOS (không đưa bookingId vào body gửi PayOS)
     const payload = {
       orderCode,
       amount: Number(finalAmount),
@@ -363,7 +364,7 @@ router.post('/payos/create-link', async (req, res) => {
           return { ok: false, status, json: data, raw: data };
         }
       };
-      // Attempt 0: plain (no signature), try multiple endpoints in sandbox for DNS issues
+      // Attempt 0: plain (no signature), chỉ headers x-client-id/x-api-key
       let attempt = { ok: false, status: 0, json: {}, raw: {} };
       for (const ep of endpoints) {
         attempt = await sendReqTo(ep, { ...payload });
@@ -375,6 +376,10 @@ router.post('/payos/create-link', async (req, res) => {
         return res.status(400).json({ success: false, message: attempt.json?.message || 'PayOS create link failed', details: attempt.json || attempt.raw, request: { ...payload } });
       }
     }
+    // Lưu mapping bookingId ↔ orderCode để xác nhận qua webhook
+    try {
+      await PaymentRequest.create({ orderCode, bookingId: type === 'booking' ? bookingId : undefined, amount: Number(finalAmount), status: 'pending' });
+    } catch (_) {}
     return res.json({ success: true, data: { checkoutUrl, orderCode, addInfo, amount: finalAmount } });
   } catch (e) {
     return res.status(500).json({ success: false, message: e.message });
