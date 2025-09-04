@@ -3,6 +3,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const axios = require('axios');
 const https = require('https');
+const dns = require('dns');
 // Robust import for different @payos/node versions/exports
 let _PayOSLib = {};
 try { _PayOSLib = require('@payos/node'); } catch (_) { _PayOSLib = {}; }
@@ -303,13 +304,18 @@ router.post('/payos/create-link', async (req, res) => {
     // Send plain payload first (per official sample)
     let checkoutUrl = null;
     {
-      const endpoint = process.env.PAYOS_API_ENDPOINT || (String(process.env.PAYOS_ENV).toLowerCase() === 'sandbox'
-        ? 'https://api-sandbox.payos.vn/v2/payment-requests'
-        : 'https://api-merchant.payos.vn/v2/payment-requests');
+      const envIsSandbox = String(process.env.PAYOS_ENV).toLowerCase() === 'sandbox';
+      const endpoints = (process.env.PAYOS_API_ENDPOINT
+        ? [process.env.PAYOS_API_ENDPOINT]
+        : envIsSandbox
+          ? ['https://api-sandbox.payos.vn/v2/payment-requests', 'https://sb-openapi.payos.vn/v2/payment-requests']
+          : ['https://api-merchant.payos.vn/v2/payment-requests']);
+
       const httpsAgent = new https.Agent({ keepAlive: true });
-      const sendReq = async (body) => {
+      const lookupIPv4 = (hostname, options, cb) => dns.lookup(hostname, { family: 4, hints: dns.ADDRCONFIG }, cb);
+      const sendReqTo = async (url, body) => {
         try {
-          const r = await axios.post(endpoint, body, {
+          const r = await axios.post(url, body, {
             headers: {
               'Content-Type': 'application/json',
               'x-client-id': clientId,
@@ -317,8 +323,9 @@ router.post('/payos/create-link', async (req, res) => {
               'Accept': 'application/json',
               'User-Agent': 'GarageBooking/1.0 (+render)'
             },
-            timeout: 8000,
+            timeout: 10000,
             httpsAgent,
+            lookup: lookupIPv4,
           });
           return { ok: true, status: r.status, json: r.data, raw: r.data };
         } catch (err) {
@@ -327,8 +334,12 @@ router.post('/payos/create-link', async (req, res) => {
           return { ok: false, status, json: data, raw: data };
         }
       };
-      // Attempt 0: plain (no signature)
-      let attempt = await sendReq({ ...payload });
+      // Attempt 0: plain (no signature), try multiple endpoints in sandbox for DNS issues
+      let attempt = { ok: false, status: 0, json: {}, raw: {} };
+      for (const ep of endpoints) {
+        attempt = await sendReqTo(ep, { ...payload });
+        if (attempt.ok && (attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl)) break;
+      }
       checkoutUrl = attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl || null;
       // If provider insists on signature (rare), and we have checksum, try fallbacks
       if ((!attempt.ok || !checkoutUrl) && (attempt.json?.code === '201' || /signature/i.test(String(attempt.json?.desc || '')))) {
@@ -336,15 +347,21 @@ router.post('/payos/create-link', async (req, res) => {
           try {
             const baseV1 = `${orderCode}${Number(finalAmount)}${String(addInfo || '')}${returnUrl}${cancelUrl}`;
             const sigV1 = crypto.createHmac('sha256', checksum).update(baseV1).digest('hex');
-            attempt = await sendReq({ ...payload, signature: sigV1 });
-            checkoutUrl = attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl || null;
+            for (const ep of endpoints) {
+              attempt = await sendReqTo(ep, { ...payload, signature: sigV1 });
+              checkoutUrl = attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl || null;
+              if (attempt.ok && checkoutUrl) break;
+            }
           } catch (_) {}
           if ((!attempt.ok || !checkoutUrl)) {
             try {
               const baseV2 = `${String(clientId)}|${String(orderCode)}|${String(Number(finalAmount))}|${String(addInfo || '')}|${String(returnUrl)}|${String(cancelUrl)}|${String(webhookUrl)}`;
               const sigV2 = crypto.createHmac('sha256', checksum).update(baseV2).digest('hex');
-              attempt = await sendReq({ ...payload, signature: sigV2 });
-              checkoutUrl = attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl || null;
+              for (const ep of endpoints) {
+                attempt = await sendReqTo(ep, { ...payload, signature: sigV2 });
+                checkoutUrl = attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl || null;
+                if (attempt.ok && checkoutUrl) break;
+              }
             } catch (_) {}
           }
         }
