@@ -106,10 +106,31 @@ async function processTransactionPayload(payload) {
     return { success: true, walletTopup: true, via: 'phone', phone, balance: user.viSoDu };
   }
 
-  // BOOK-<maVe>
-  const match = normalized.match(/BOOK-([A-Z0-9\-]+)/);
-  if (!match) return { success: true, skipped: true, reason: 'No booking code or recognizable TOPUP tag' };
-  const maVe = match[1];
+  // BOOK-<maVe> or PAY-<orderCode>
+  let maVe = null;
+  let orderCode = null;
+  const mBook = normalized.match(/BOOK-([A-Z0-9\-]+)/);
+  const mPay = normalized.match(/PAY-([0-9]{6,13})/);
+  if (mBook) {
+    maVe = mBook[1];
+  } else if (mPay) {
+    orderCode = mPay[1];
+  } else {
+    return { success: true, skipped: true, reason: 'No booking code or recognizable TOPUP tag' };
+  }
+
+  if (orderCode) {
+    // Map từ orderCode → booking nếu có PaymentRequest (tuỳ hệ thống)
+    try {
+      const pr = await PaymentRequest.findOne({ orderCode: Number(orderCode) }).lean();
+      if (pr?.bookingId) {
+        const booking = await Booking.findById(pr.bookingId);
+        if (booking) maVe = booking.maVe;
+      }
+    } catch (_) {}
+  }
+
+  if (!maVe) return { success: true, skipped: true, reason: 'Cannot resolve booking' };
   const booking = await Booking.findOne({ maVe });
   if (!booking) return { success: true, skipped: true, reason: 'Booking not found' };
   if (booking.trangThaiThanhToan === 'da_thanh_toan') return { success: true, alreadyPaid: true };
@@ -150,13 +171,23 @@ async function processTransactionPayload(payload) {
 // Use header 'x-webhook-secret' or query ?secret= to verify
 router.post('/webhook/casso', async (req, res) => {
   try {
-    const provided = req.headers['x-webhook-secret'] || req.query.secret || '';
-    const secret = process.env.WEBHOOK_SECRET || 'abc123';
+    const provided = req.headers['x-webhook-secret']
+      || req.headers['x-casso-secret']
+      || req.headers['x-casso-webhook-secret']
+      || req.query.secret
+      || '';
+    const secret = process.env.CASSO_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || 'abc123';
     if (!secret || provided !== secret) {
       return res.status(401).json({ success: false, message: 'Invalid secret' });
     }
 
     const { description = '', amount, accountNumber, bankCode, txnId } = req.body || {};
+    if (!description && typeof req.body === 'string') {
+      try {
+        const parsed = JSON.parse(req.body);
+        req.body = parsed;
+      } catch (_) {}
+    }
     const txRef = String(txnId || '').trim();
     // Only process credits to our MB account
     const OUR_ACC = (process.env.PAY_ACC || '0585761955').trim();
