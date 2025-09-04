@@ -370,34 +370,9 @@ router.post('/payos/create-link', async (req, res) => {
         if (attempt.ok && (attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl)) break;
       }
       checkoutUrl = attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl || null;
-      // Nếu provider yêu cầu signature (ít gặp), thử ký theo 2 công thức
-      if ((!attempt.ok || !checkoutUrl) && (attempt.json?.code === '201' || /signature/i.test(String(attempt.json?.desc || '')))) {
-        if (checksum) {
-          try {
-            const baseV1 = `${orderCode}${Number(finalAmount)}${String(addInfo || '')}${returnUrl}${cancelUrl}`;
-            const sigV1 = crypto.createHmac('sha256', checksum).update(baseV1).digest('hex');
-            for (const ep of endpoints) {
-              attempt = await sendReqTo(ep, { ...payload, signature: sigV1 });
-              checkoutUrl = attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl || null;
-              if (attempt.ok && checkoutUrl) break;
-            }
-          } catch (_) {}
-          if ((!attempt.ok || !checkoutUrl)) {
-            try {
-              const baseV2 = `${String(clientId)}|${String(orderCode)}|${String(Number(finalAmount))}|${String(addInfo || '')}|${String(returnUrl)}|${String(cancelUrl)}|${String(webhookUrl)}`;
-              const sigV2 = crypto.createHmac('sha256', checksum).update(baseV2).digest('hex');
-              for (const ep of endpoints) {
-                attempt = await sendReqTo(ep, { ...payload, signature: sigV2 });
-                checkoutUrl = attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl || null;
-                if (attempt.ok && checkoutUrl) break;
-              }
-            } catch (_) {}
-          }
-        }
-      }
       if (!attempt.ok || !checkoutUrl) {
-        try { console.error('PayOS create-link failed', { status: attempt.status, endpoint, data: attempt.json || attempt.raw, attempts: ['v1','v1.1','v2'] }); } catch (_) {}
-        return res.status(400).json({ success: false, message: attempt.json?.message || 'PayOS create link failed', details: attempt.json || attempt.raw, request: { ...payload, signature: '<computed>' } });
+        try { console.error('PayOS create-link failed', { status: attempt.status, endpoint, data: attempt.json || attempt.raw, attempts: ['plain'] }); } catch (_) {}
+        return res.status(400).json({ success: false, message: attempt.json?.message || 'PayOS create link failed', details: attempt.json || attempt.raw, request: { ...payload } });
       }
     }
     return res.json({ success: true, data: { checkoutUrl, orderCode, addInfo, amount: finalAmount } });
