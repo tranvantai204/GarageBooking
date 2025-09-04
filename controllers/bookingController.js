@@ -193,12 +193,17 @@ exports.checkInBooking = async (req, res) => {
     try {
         const { qrData } = req.body;
 
-        // 1. Parse QR data
+        // 1. Parse QR data - chấp nhận cả JSON hoặc chỉ maVe (string)
         let parsedData;
         try {
-            parsedData = JSON.parse(qrData);
+            parsedData = typeof qrData === 'string' ? JSON.parse(qrData) : qrData;
         } catch (e) {
-            return res.status(400).json({ success: false, message: 'QR code không hợp lệ' });
+            // Nếu không phải JSON, coi như qrData là mã vé
+            if (typeof qrData === 'string' && qrData.trim()) {
+                parsedData = { maVe: qrData.trim() };
+            } else {
+                return res.status(400).json({ success: false, message: 'QR code không hợp lệ' });
+            }
         }
 
         // 2. Tìm booking theo mã vé
