@@ -375,10 +375,46 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('trip_paused', async (data) => {
+    try {
+      const { tripId, driverId, paused } = data || {};
+      io.emit('trip_status_update', { tripId, driverId, status: paused ? 'paused' : 'resumed', ts: Date.now() });
+    } catch (e) {
+      console.error('trip_paused error', e);
+    }
+  });
+
   socket.on('trip_ended', async (data) => {
     try {
       const { tripId, driverId } = data || {};
       io.emit('trip_status_update', { tripId, driverId, status: 'ended', ts: Date.now() });
+      // Gửi FCM tới khách đã check-in để mời đánh giá
+      try {
+        const Booking = require('./models/Booking');
+        const bookings = await Booking.find({ tripId, trangThaiCheckIn: 'da_check_in' }).select('userId');
+        const userIds = bookings.map((b) => String(b.userId));
+        if (userIds.length > 0) {
+          const tokens = await PushToken.find({ userId: { $in: userIds } });
+          const tokenList = tokens.map((t) => t.token).filter(Boolean);
+          if (tokenList.length > 0) {
+            await admin.messaging().sendEachForMulticast({
+              tokens: tokenList,
+              notification: {
+                title: 'Đánh giá chuyến đi',
+                body: 'Chuyến đã kết thúc, vui lòng đánh giá tài xế.',
+              },
+              data: {
+                type: 'driver_rate_request',
+                tripId: String(tripId || ''),
+              },
+              android: {
+                priority: 'high',
+                notification: { channelId: 'general_notifications', priority: 'high' },
+              },
+            });
+          }
+        }
+      } catch (pushErr) { console.error('rate_request push error:', pushErr); }
     } catch (e) {
       console.error('trip_ended error', e);
     }
