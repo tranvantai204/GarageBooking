@@ -106,7 +106,7 @@ async function processTransactionPayload(payload) {
     return { success: true, walletTopup: true, via: 'phone', phone, balance: user.viSoDu };
   }
 
-  // BOOK-<maVe> or PAY-<orderCode>
+  // BOOK-<maVe> or PAY-<orderCode> or fallback HAPHUONG-xxxx
   let maVe = null;
   let orderCode = null;
   const mBook = normalized.match(/BOOK-([A-Z0-9\-]+)/);
@@ -116,8 +116,22 @@ async function processTransactionPayload(payload) {
   } else if (mPay) {
     orderCode = mPay[1];
   } else {
-    return { success: true, skipped: true, reason: 'No booking code or recognizable TOPUP tag' };
+    // Accept HAPHUONG<digits> or BOOKHAPHUONG<digits> with optional '-'
+    let mVe = normalized.match(/(HAPHUONG-?[0-9]{6,20})/);
+    if (!mVe) {
+      const mBookVe = normalized.match(/BOOKHAPHUONG-?([0-9]{6,20})/);
+      if (mBookVe) {
+        maVe = `HAPHUONG-${mBookVe[1]}`;
+      }
+    }
+    if (mVe && !maVe) {
+      // Ensure having hyphen in maVe string
+      const raw = mVe[1];
+      maVe = raw.includes('HAPHUONG-') ? raw : raw.replace('HAPHUONG', 'HAPHUONG-');
+    }
   }
+
+  if (!maVe && !orderCode) return { success: true, skipped: true, reason: 'No booking code or recognizable TOPUP tag' };
 
   if (orderCode) {
     // Map từ orderCode → booking nếu có PaymentRequest (tuỳ hệ thống)
@@ -136,7 +150,7 @@ async function processTransactionPayload(payload) {
   if (booking.trangThaiThanhToan === 'da_thanh_toan') return { success: true, alreadyPaid: true };
   const paid = parseInt(amount, 10) || 0;
   const expected = parseInt(booking.tongTien, 10) || 0;
-  if (Math.abs(paid - expected) > 2000) return { success: true, skipped: true, reason: 'Amount mismatch' };
+  if (Math.abs(paid - expected) > 10000) return { success: true, skipped: true, reason: 'Amount mismatch' };
   const txRef = String(txnId || '').trim();
   if (txRef) {
     const exists = await WalletTx.findOne({ type: 'payment', ref: txRef }).lean();
