@@ -49,6 +49,7 @@ app.post('/api/payments/create', async (req, res) => {
       description: String(description || `BOOK-${orderCode}`),
       returnUrl: String(returnUrl || 'https://garagebooking.onrender.com/payos/return'),
       cancelUrl: String(cancelUrl || 'https://garagebooking.onrender.com/payos/cancel'),
+      webhookUrl: String(process.env.PAYOS_WEBHOOK_URL || 'https://garagebooking.onrender.com/api/payments/payos'),
       items: [
         { name: String(description || `BOOK-${orderCode}`), quantity: 1, price: Number(amount) },
       ],
@@ -65,10 +66,13 @@ app.post('/api/payments/create', async (req, res) => {
       },
       body: JSON.stringify(payload),
     });
-    const data = await resp.json().catch(() => ({}));
+    const text = await resp.text();
+    let data = {};
+    try { data = JSON.parse(text || '{}'); } catch (_) { data = { raw: text }; }
 
     const checkoutUrl = data?.data?.checkoutUrl || data?.checkoutUrl;
     if (!resp.ok || !checkoutUrl) {
+      console.error('PayOS create-link failed', { status: resp.status, endpoint, data });
       return res.status(400).json({ success: false, message: data?.desc || data?.message || 'PayOS create link failed', details: data, request: payload });
     }
 
@@ -90,6 +94,22 @@ app.post('/api/payments/create', async (req, res) => {
   } catch (e) {
     return res.status(500).json({ success: false, message: e.message });
   }
+});
+
+// Debug: kiểm tra biến môi trường PayOS có mặt chưa
+app.get('/api/payments/debug', (_req, res) => {
+  const redact = (v) => (v ? `${String(v).slice(0, 3)}...${String(v).slice(-3)}` : null);
+  return res.json({
+    success: true,
+    data: {
+      hasClientId: !!PAYOS_CLIENT_ID,
+      hasApiKey: !!PAYOS_API_KEY,
+      hasChecksum: !!PAYOS_CHECKSUM_KEY,
+      endpoint: 'https://api-merchant.payos.vn/v2/payment-requests',
+      clientIdSample: redact(PAYOS_CLIENT_ID),
+      apiKeySample: redact(PAYOS_API_KEY),
+    },
+  });
 });
 
 // 2) Webhook PayOS: xác thực HMAC và cập nhật đơn hàng
@@ -156,6 +176,11 @@ app.post('/api/payments/payos', async (req, res) => {
   } catch (e) {
     return res.status(500).json({ success: false, message: e.message });
   }
+});
+
+// Health (GET) for providers that validate webhook by GET
+app.get('/api/payments/payos', (_req, res) => {
+  return res.status(200).json({ success: true, message: 'PayOS webhook is alive. Use POST to deliver events.' });
 });
 
 // 3) Lấy thông tin đơn hàng
