@@ -238,6 +238,16 @@ exports.checkInBooking = async (req, res) => {
                 .populate('userId', 'hoTen soDienThoai');
         }
 
+        // Fallback: match theo đuôi số (nhiều hệ thống chỉ giữ lại phần số)
+        if (!booking) {
+            const digits = (maVeStr.match(/(\d{6,20})/) || [])[1];
+            if (digits) {
+                booking = await Booking.findOne({ maVe: { $regex: digits + '$', $options: 'i' } })
+                    .populate('tripId', 'diemDi diemDen thoiGianKhoiHanh taiXe')
+                    .populate('userId', 'hoTen soDienThoai');
+            }
+        }
+
         if (!booking) {
             return res.status(404).json({ success: false, message: `Không tìm thấy vé: ${maVeStr}` });
         }
