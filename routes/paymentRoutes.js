@@ -290,18 +290,24 @@ router.post('/payos/create-link', async (req, res) => {
     const returnUrl = process.env.PAYOS_RETURN_URL || 'https://garagebooking.onrender.com/payos/return';
     const cancelUrl = process.env.PAYOS_CANCEL_URL || 'https://garagebooking.onrender.com/payos/cancel';
 
-    // Build payload
-    const webhookUrl = process.env.PAYOS_WEBHOOK_URL || '';
+    // Build payload theo mẫu chính thức của PayOS
     const payload = {
       orderCode,
       amount: Number(finalAmount),
-      description: String(addInfo || '').slice(0, 90),
+      description: String(addInfo || 'Thanh toan don hang'),
       returnUrl,
       cancelUrl,
-      webhookUrl: webhookUrl || undefined,
-      buyerName: req.body.buyerName || 'Khach hang',
-      buyerEmail: req.body.buyerEmail || 'customer@example.com',
-      buyerPhone: req.body.buyerPhone || '0900000000',
+      items: [
+        {
+          name: String(addInfo || 'Ticket'),
+          quantity: 1,
+          price: Number(finalAmount),
+        },
+      ],
+      // Buyer info chỉ gửi khi client cung cấp để tránh validate không cần thiết
+      ...(req.body.buyerName ? { buyerName: String(req.body.buyerName) } : {}),
+      ...(req.body.buyerEmail ? { buyerEmail: String(req.body.buyerEmail) } : {}),
+      ...(req.body.buyerPhone ? { buyerPhone: String(req.body.buyerPhone) } : {}),
     };
     // Send plain payload first (per official sample)
     let checkoutUrl = null;
@@ -364,7 +370,7 @@ router.post('/payos/create-link', async (req, res) => {
         if (attempt.ok && (attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl)) break;
       }
       checkoutUrl = attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl || null;
-      // If provider insists on signature (rare), and we have checksum, try fallbacks
+      // Nếu provider yêu cầu signature (ít gặp), thử ký theo 2 công thức
       if ((!attempt.ok || !checkoutUrl) && (attempt.json?.code === '201' || /signature/i.test(String(attempt.json?.desc || '')))) {
         if (checksum) {
           try {
