@@ -233,11 +233,18 @@ router.post('/qr', async (req, res) => {
     let addInfo = '';
 
     if (type === 'booking') {
-      if (!bookingId) return res.status(400).json({ success: false, message: 'Thiếu bookingId' });
-      const booking = await Booking.findById(bookingId);
-      if (!booking) return res.status(404).json({ success: false, message: 'Không tìm thấy vé' });
-      addInfo = `BOOK-${booking.maVe}`;
-      if (!finalAmount) finalAmount = parseInt(booking.tongTien, 10) || 0;
+      if (bookingId) {
+        const booking = await Booking.findById(bookingId);
+        if (!booking) return res.status(404).json({ success: false, message: 'Không tìm thấy vé' });
+        addInfo = `BOOK-${booking.maVe}`;
+        if (!finalAmount) finalAmount = parseInt(booking.tongTien, 10) || 0;
+      } else {
+        // Cho phép tạo link không có bookingId nếu đã truyền đủ amount + description
+        if (!finalAmount || finalAmount <= 0 || !req.body.description) {
+          return res.status(400).json({ success: false, message: 'Thiếu bookingId hoặc amount+description' });
+        }
+        addInfo = String(req.body.description);
+      }
     } else {
       const uid = String(userId || req.user?._id || '');
       if (!uid) return res.status(400).json({ success: false, message: 'Thiếu userId' });
