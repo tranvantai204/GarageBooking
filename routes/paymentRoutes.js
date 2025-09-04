@@ -278,11 +278,15 @@ router.post('/payos/create-link', async (req, res) => {
     let finalAmount = parseInt(amount, 10) || 0;
     let addInfo = '';
     if (type === 'booking') {
-      if (!bookingId) return res.status(400).json({ success: false, message: 'Thiếu bookingId' });
-      const booking = await Booking.findById(bookingId);
-      if (!booking) return res.status(404).json({ success: false, message: 'Không tìm thấy vé' });
-      addInfo = `BOOK-${booking.maVe}`;
-      if (!finalAmount) finalAmount = parseInt(booking.tongTien, 10) || 0;
+      if (bookingId) {
+        const booking = await Booking.findById(bookingId);
+        if (!booking) return res.status(404).json({ success: false, message: 'Không tìm thấy vé' });
+        addInfo = `BOOK-${booking.maVe}`;
+        if (!finalAmount) finalAmount = parseInt(booking.tongTien, 10) || 0;
+      } else {
+        // Cho phép tạo link không có bookingId nếu client truyền đủ amount/description
+        addInfo = String(req.body.description || 'Thanh toan');
+      }
     } else {
       const uid = String(userId || '');
       if (!uid) return res.status(400).json({ success: false, message: 'Thiếu userId' });
