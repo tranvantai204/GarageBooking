@@ -306,12 +306,7 @@ router.post('/payos/create-link', async (req, res) => {
     // Send plain payload first (per official sample)
     let checkoutUrl = null;
     {
-      const envIsSandbox = String(process.env.PAYOS_ENV).toLowerCase() === 'sandbox';
-      const endpoints = (process.env.PAYOS_API_ENDPOINT
-        ? [process.env.PAYOS_API_ENDPOINT]
-        : envIsSandbox
-          ? ['https://api-sandbox.payos.vn/v2/payment-requests', 'https://sb-openapi.payos.vn/v2/payment-requests']
-          : ['https://api-merchant.payos.vn/v2/payment-requests']);
+      const endpoints = [process.env.PAYOS_API_ENDPOINT || 'https://api-merchant.payos.vn/v2/payment-requests'];
 
       const httpsAgent = new https.Agent({ keepAlive: true });
       const lookupIPv4 = (hostname, options, cb) => dns.lookup(hostname, { family: 4, hints: dns.ADDRCONFIG }, cb);
