@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const axios = require('axios');
 const https = require('https');
 const dns = require('dns');
+const { URL } = require('url');
 // Robust import for different @payos/node versions/exports
 let _PayOSLib = {};
 try { _PayOSLib = require('@payos/node'); } catch (_) { _PayOSLib = {}; }
@@ -331,6 +332,32 @@ router.post('/payos/create-link', async (req, res) => {
         } catch (err) {
           const status = err?.response?.status || 500;
           const data = err?.response?.data || { message: err?.message, code: err?.code };
+          // Fallback: resolve host to IP and call via IP with Host + SNI
+          try {
+            const u = new URL(url);
+            const host = u.hostname;
+            const path = u.pathname;
+            const ips = await new Promise((resolve) => {
+              dns.resolve4(host, (e, a) => resolve(Array.isArray(a) ? a : []));
+            });
+            for (const ip of ips) {
+              try {
+                const r2 = await axios.post(`https://${ip}${path}`, body, {
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'x-client-id': clientId,
+                    'x-api-key': apiKey,
+                    'Accept': 'application/json',
+                    'User-Agent': 'GarageBooking/1.0 (+render)',
+                    'Host': host,
+                  },
+                  timeout: 10000,
+                  httpsAgent: new https.Agent({ keepAlive: true, servername: host }),
+                });
+                return { ok: true, status: r2.status, json: r2.data, raw: r2.data };
+              } catch (_) {}
+            }
+          } catch (_) {}
           return { ok: false, status, json: data, raw: data };
         }
       };
