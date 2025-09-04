@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
+const axios = require('axios');
+const https = require('https');
 // Robust import for different @payos/node versions/exports
 let _PayOSLib = {};
 try { _PayOSLib = require('@payos/node'); } catch (_) { _PayOSLib = {}; }
@@ -304,20 +306,26 @@ router.post('/payos/create-link', async (req, res) => {
       const endpoint = process.env.PAYOS_API_ENDPOINT || (String(process.env.PAYOS_ENV).toLowerCase() === 'sandbox'
         ? 'https://api-sandbox.payos.vn/v2/payment-requests'
         : 'https://api-merchant.payos.vn/v2/payment-requests');
+      const httpsAgent = new https.Agent({ keepAlive: true });
       const sendReq = async (body) => {
-        const r = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-client-id': clientId,
-            'x-api-key': apiKey,
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify(body),
-        });
-        const raw = await r.text();
-        let json = {}; try { json = JSON.parse(raw || '{}'); } catch (_) {}
-        return { ok: r.ok, status: r.status, json, raw };
+        try {
+          const r = await axios.post(endpoint, body, {
+            headers: {
+              'Content-Type': 'application/json',
+              'x-client-id': clientId,
+              'x-api-key': apiKey,
+              'Accept': 'application/json',
+              'User-Agent': 'GarageBooking/1.0 (+render)'
+            },
+            timeout: 8000,
+            httpsAgent,
+          });
+          return { ok: true, status: r.status, json: r.data, raw: r.data };
+        } catch (err) {
+          const status = err?.response?.status || 500;
+          const data = err?.response?.data || { message: err?.message, code: err?.code };
+          return { ok: false, status, json: data, raw: data };
+        }
       };
       // Attempt 0: plain (no signature)
       let attempt = await sendReq({ ...payload });
