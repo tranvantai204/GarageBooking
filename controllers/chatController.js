@@ -318,7 +318,7 @@ exports.getMessages = async (req, res) => {
 exports.sendMessage = async (req, res) => {
   try {
     const { chatId } = req.params;
-    const { content, messageType = 'text', replyTo } = req.body;
+    const { content, messageType = 'text', replyTo, fileUrl } = req.body;
     const userId = req.user.id;
 
     if (!content || content.trim() === '') {
@@ -352,6 +352,7 @@ exports.sendMessage = async (req, res) => {
       senderRole: user.vaiTro,
       content: content.trim(),
       messageType,
+      fileUrl: fileUrl,
       replyTo: replyTo || undefined,
       readBy: [{
         userId,
