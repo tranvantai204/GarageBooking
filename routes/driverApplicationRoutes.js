@@ -3,6 +3,8 @@ const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
 const DriverApplication = require('../models/DriverApplication');
 const User = require('../models/User');
+const PushToken = require('../models/PushToken');
+const admin = require('../init_fcm');
 
 // Submit application (user)
 router.post('/', protect, async (req, res) => {
@@ -53,6 +55,23 @@ router.post('/:id/approve', protect, async (req, res) => {
     await app.save();
     // Update user role to driver
     await User.findByIdAndUpdate(app.userId, { vaiTro: 'driver' });
+    // Send FCM push to applicant about approval
+    try {
+      const tokenDoc = await PushToken.findOne({ userId: app.userId });
+      const payload = {
+        notification: {
+          title: 'Đơn đã được duyệt',
+          body: 'Bạn đã trở thành tài xế của nhà xe',
+        },
+        data: { type: 'driver_approved', userId: String(app.userId) },
+        android: { priority: 'high', notification: { channelId: 'general_notifications', priority: 'high' } },
+      };
+      if (tokenDoc?.token) {
+        await admin.messaging().send({ ...payload, token: tokenDoc.token });
+      } else {
+        await admin.messaging().send({ ...payload, topic: `user_${String(app.userId)}` });
+      }
+    } catch (e) { console.error('FCM driver_approved error:', e); }
     res.json({ success: true, message: 'Đã duyệt làm tài xế', data: app });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Lỗi server', error: e.message });
