@@ -55,7 +55,7 @@ router.post('/image', protect, upload.single('image'), (req, res) => {
     
     const imageUrl = `/uploads/${req.file.filename}`;
     
-    res.json({
+    return res.status(200).json({
       success: true,
       data: {
         imageUrl: imageUrl,
@@ -67,7 +67,7 @@ router.post('/image', protect, upload.single('image'), (req, res) => {
     });
   } catch (error) {
     console.error('Upload error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Lỗi upload ảnh',
       error: error.message
@@ -94,14 +94,14 @@ router.post('/images', protect, upload.array('images', 5), (req, res) => {
       size: file.size
     }));
     
-    res.json({
+    return res.status(200).json({
       success: true,
       data: uploadedFiles,
       message: `Upload ${req.files.length} ảnh thành công`
     });
   } catch (error) {
     console.error('Upload error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Lỗi upload ảnh',
       error: error.message
@@ -111,6 +111,9 @@ router.post('/images', protect, upload.array('images', 5), (req, res) => {
 
 // Error handling middleware for multer
 router.use((error, req, res, next) => {
+  if (res.headersSent) {
+    return next(error);
+  }
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
@@ -120,7 +123,7 @@ router.use((error, req, res, next) => {
     }
   }
   
-  res.status(500).json({
+  return res.status(500).json({
     success: false,
     message: error.message || 'Lỗi upload file'
   });
