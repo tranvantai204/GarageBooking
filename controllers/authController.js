@@ -1,6 +1,7 @@
 // File: controllers/authController.js
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
@@ -56,6 +57,52 @@ exports.login = async (req, res) => {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
+};
+
+// === Password reset via phone number (OTP) ===
+// @route POST /api/auth/forgot
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { soDienThoai } = req.body || {};
+    if (!soDienThoai) return res.status(400).json({ success: false, message: 'Thiếu số điện thoại' });
+    const user = await User.findOne({ soDienThoai });
+    if (!user) return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản' });
+    // Rate-limit: chỉ cho gửi lại sau 60 giây
+    const now = new Date();
+    if (user.resetOtpLastSent && (now - user.resetOtpLastSent) < 60 * 1000) {
+      const remain = 60 - Math.floor((now - user.resetOtpLastSent) / 1000);
+      return res.status(429).json({ success: false, message: `Vui lòng thử lại sau ${remain}s` });
+    }
+    const otp = ('' + Math.floor(100000 + Math.random() * 900000));
+    user.resetOtp = otp;
+    user.resetOtpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 phút
+    user.resetOtpLastSent = now;
+    await user.save();
+    // TODO: Tích hợp SMS provider tại đây. Tạm thời trả về OTP trong response cho bản dev
+    return res.json({ success: true, message: 'Đã tạo OTP', otp });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: 'Lỗi server', error: e.message });
+  }
+};
+
+// @route POST /api/auth/reset
+exports.resetPassword = async (req, res) => {
+  try {
+    const { soDienThoai, otp, matKhauMoi } = req.body || {};
+    if (!soDienThoai || !otp || !matKhauMoi) return res.status(400).json({ success: false, message: 'Thiếu dữ liệu' });
+    const user = await User.findOne({ soDienThoai }).select('+matKhau');
+    if (!user) return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản' });
+    if (!user.resetOtp || !user.resetOtpExpires || user.resetOtp !== otp || user.resetOtpExpires < new Date()) {
+      return res.status(400).json({ success: false, message: 'OTP không hợp lệ hoặc đã hết hạn' });
+    }
+    user.matKhau = matKhauMoi;
+    user.resetOtp = undefined;
+    user.resetOtpExpires = undefined;
+    await user.save();
+    return res.json({ success: true, message: 'Đặt lại mật khẩu thành công' });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: 'Lỗi server', error: e.message });
   }
 };
 

@@ -7,12 +7,16 @@ const {
   getMe,
   getAllUsers,
   createUser,
-  updateUserProfile
+  updateUserProfile,
+  forgotPassword,
+  resetPassword,
 } = require('../controllers/authController');
 const { protect, isAdmin } = require('../middleware/authMiddleware');
 
 router.post('/register', register);
 router.post('/login', login);
+router.post('/forgot', forgotPassword);
+router.post('/reset', resetPassword);
 router.get('/me', protect, getMe);
 
 // User management routes

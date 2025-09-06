@@ -26,6 +26,10 @@ const userSchema = new mongoose.Schema({
   isVip: { type: Boolean, default: false },
   // Simple in-app wallet balance (VND)
   viSoDu: { type: Number, default: 0 },
+  // Password reset via OTP
+  resetOtp: { type: String },
+  resetOtpExpires: { type: Date },
+  resetOtpLastSent: { type: Date },
 }, { timestamps: true });
 
 userSchema.pre('save', async function (next) {

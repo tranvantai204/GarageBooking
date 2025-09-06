@@ -80,6 +80,8 @@ const admin = require('./init_fcm');
 
 // Store connected users
 const connectedUsers = new Map();
+// Store last known driver locations for snapshot on demand
+const lastKnownLocations = new Map();
 
 io.on('connection', (socket) => {
   console.log('🔌 User connected:', socket.id);
@@ -341,10 +343,22 @@ io.on('connection', (socket) => {
       // data: { userId, lat, lng, tripId }
       const { userId, lat, lng, tripId } = data || {};
       if (!userId || typeof lat !== 'number' || typeof lng !== 'number') return;
+      // Save last known location
+      lastKnownLocations.set(String(userId), { userId: String(userId), lat, lng, tripId, ts: Date.now() });
       // Broadcast to admins only for now
       io.emit('driver_location_update', { userId, lat, lng, tripId, ts: Date.now() });
     } catch (err) {
       console.error('driver_location error:', err);
+    }
+  });
+
+  // Allow admin to request a snapshot of all driver locations
+  socket.on('request_driver_locations', () => {
+    try {
+      const items = Array.from(lastKnownLocations.values());
+      socket.emit('driver_locations_snapshot', { items });
+    } catch (e) {
+      console.error('request_driver_locations error:', e);
     }
   });
 
