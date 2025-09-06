@@ -24,12 +24,19 @@ const storage = multer.diskStorage({
   }
 });
 
-// File filter for images
+// File filter for images (accept wide range, including emulator/desktop picks)
 const imageFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith('image/')) {
-    cb(null, true);
-  } else {
-    cb(new Error('Chỉ chấp nhận file ảnh!'), false);
+  try {
+    const allowedExt = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic', '.heif'];
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const isImageMime = (file.mimetype || '').toLowerCase().startsWith('image/');
+    const isAllowedExt = allowedExt.includes(ext);
+    if (isImageMime || isAllowedExt) {
+      return cb(null, true);
+    }
+    return cb(new Error('Chỉ chấp nhận file ảnh (jpg, png, gif, webp, bmp, heic/heif).'), false);
+  } catch (e) {
+    return cb(new Error('Lỗi kiểm tra định dạng ảnh'), false);
   }
 };
 
