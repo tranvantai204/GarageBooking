@@ -132,6 +132,10 @@ io.on('connection', (socket) => {
         if (targetFcmToken) {
           const message = {
             token: targetFcmToken,
+            notification: {
+              title: 'Cuộc gọi đến',
+              body: String(caller?.userName || 'Ai đó đang gọi'),
+            },
             data: {
               type: 'incoming_call',
               channelName: String(channelName),
@@ -151,6 +155,10 @@ io.on('connection', (socket) => {
           // Fallback to user topic (works even if user hasn't re-logged)
           const topicMessage = {
             topic: `user_${String(targetUserId)}`,
+            notification: {
+              title: 'Cuộc gọi đến',
+              body: String(caller?.userName || 'Ai đó đang gọi'),
+            },
             data: {
               type: 'incoming_call',
               channelName: String(channelName),
