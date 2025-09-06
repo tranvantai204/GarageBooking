@@ -66,9 +66,9 @@ exports.login = async (req, res) => {
 // @route POST /api/auth/forgot
 exports.forgotPassword = async (req, res) => {
   try {
-    const { soDienThoai, email } = req.body || {};
-    if (!soDienThoai && !email) return res.status(400).json({ success: false, message: 'Thiếu số điện thoại hoặc email' });
-    const user = await User.findOne(soDienThoai ? { soDienThoai } : { email });
+    const { email } = req.body || {};
+    if (!email) return res.status(400).json({ success: false, message: 'Thiếu email' });
+    const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản' });
     // Rate-limit: chỉ cho gửi lại sau 60 giây
     const now = new Date();
@@ -82,18 +82,9 @@ exports.forgotPassword = async (req, res) => {
     user.resetOtpLastSent = now;
     await user.save();
     // Nếu có email → gửi OTP qua email, ngược lại qua SMS
-    if (email || user.email) {
-      const target = email || user.email;
-      await sendEmail(target, 'Ma OTP dat lai mat khau', `Ma OTP cua ban: ${otp} (hieu luc 10 phut)`);
-      const includeOtp = !process.env.SMTP_HOST; // dev mode
-      return res.json({ success: true, message: 'Đã gửi OTP qua email', ...(includeOtp ? { otp } : {}) });
-    } else if (soDienThoai) {
-      try { await sendOtpSms(soDienThoai, otp); } catch (_) {}
-      const includeOtp = (process.env.SMS_PROVIDER || '').toLowerCase() !== 'twilio';
-      return res.json({ success: true, message: 'Đã tạo OTP', ...(includeOtp ? { otp } : {}) });
-    } else {
-      return res.json({ success: true, message: 'Đã tạo OTP' });
-    }
+    await sendEmail(email, 'Ma OTP dat lai mat khau', `Ma OTP cua ban: ${otp} (hieu luc 10 phut)`);
+    const includeOtp = !process.env.SMTP_HOST; // dev mode
+    return res.json({ success: true, message: 'Đã gửi OTP qua email', ...(includeOtp ? { otp } : {}) });
   } catch (e) {
     return res.status(500).json({ success: false, message: 'Lỗi server', error: e.message });
   }
@@ -102,9 +93,9 @@ exports.forgotPassword = async (req, res) => {
 // @route POST /api/auth/reset
 exports.resetPassword = async (req, res) => {
   try {
-    const { soDienThoai, email, otp, matKhauMoi } = req.body || {};
-    if ((!soDienThoai && !email) || !otp || !matKhauMoi) return res.status(400).json({ success: false, message: 'Thiếu dữ liệu' });
-    const user = await User.findOne(soDienThoai ? { soDienThoai } : { email }).select('+matKhau');
+    const { email, otp, matKhauMoi } = req.body || {};
+    if (!email || !otp || !matKhauMoi) return res.status(400).json({ success: false, message: 'Thiếu dữ liệu' });
+    const user = await User.findOne({ email }).select('+matKhau');
     if (!user) return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản' });
     if (!user.resetOtp || !user.resetOtpExpires || user.resetOtp !== otp || user.resetOtpExpires < new Date()) {
       return res.status(400).json({ success: false, message: 'OTP không hợp lệ hoặc đã hết hạn' });
