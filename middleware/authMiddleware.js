@@ -18,22 +18,22 @@ exports.protect = async (req, res, next) => {
       // -matKhau để không lấy trường mật khẩu
       req.user = await User.findById(decoded.id).select('-matKhau');
 
-      next(); // Cho phép đi tiếp đến hàm xử lý chính
+      return next(); // Cho phép đi tiếp đến hàm xử lý chính
     } catch (error) {
       console.error(error);
-      res.status(401).json({ success: false, message: 'Not authorized, token failed' });
+      return res.status(401).json({ success: false, message: 'Not authorized, token failed' });
     }
   }
 
   if (!token) {
-    res.status(401).json({ success: false, message: 'Not authorized, no token' });
+    return res.status(401).json({ success: false, message: 'Not authorized, no token' });
   }
 };
 exports.isAdmin = (req, res, next) => {
     // Hàm này phải được dùng SAU hàm 'protect', vì nó cần req.user do hàm 'protect' tạo ra
     if (req.user && req.user.vaiTro === 'admin') {
-      next(); // Nếu là admin, cho đi tiếp
+      return next(); // Nếu là admin, cho đi tiếp
     } else {
-      res.status(403).json({ success: false, message: 'Not authorized as an admin' }); // Lỗi 403 Forbidden: Bị cấm truy cập
+      return res.status(403).json({ success: false, message: 'Not authorized as an admin' }); // Lỗi 403 Forbidden: Bị cấm truy cập
     }
   };
