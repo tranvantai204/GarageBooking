@@ -8,7 +8,7 @@ const User = require('../models/User');
 router.post('/', protect, async (req, res) => {
   try {
     const { hoTen, soDienThoai, email, gplxUrl, cccdUrl, note } = req.body || {};
-    if (!hoTen || !soDienThoai || !gplxUrl || !cccdUrl) {
+    if (!hoTen || !soDienThoai) {
       return res.status(400).json({ success: false, message: 'Thiếu dữ liệu bắt buộc' });
     }
     const exists = await DriverApplication.findOne({ userId: req.user.id, status: 'pending' });
