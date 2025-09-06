@@ -1,6 +1,7 @@
 // File: controllers/tripController.js
 
 const Trip = require('../models/Trip');
+const mongoose = require('mongoose');
 
 // @desc    Admin tạo chuyến đi mới
 // @route   POST /api/trips
@@ -124,6 +125,34 @@ exports.findTrips = async (req, res) => {
   } catch (error) {
     console.error('❌ Error in findTrips:', error);
     res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+  }
+};
+
+// @desc    Lấy các chuyến theo tài xế (upcoming)
+// @route   GET /api/trips/driver/:id
+// @access  Public
+exports.getTripsByDriver = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ success: false, message: 'Missing driver id' });
+    let driverObjectId;
+    try { driverObjectId = new mongoose.Types.ObjectId(id); } catch (_) { driverObjectId = null; }
+    const now = new Date();
+    const query = {
+      thoiGianKhoiHanh: { $gt: now },
+      $or: [
+        ...(driverObjectId ? [{ taiXeId: driverObjectId }] : []),
+      ],
+    };
+    // If cannot parse ObjectId, still try by string compare in aggregation
+    if (!driverObjectId) {
+      query.$or.push({ taiXeId: id });
+    }
+    const trips = await Trip.find(query).sort({ thoiGianKhoiHanh: 1 });
+    return res.json({ success: true, data: trips });
+  } catch (error) {
+    console.error('getTripsByDriver error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
   }
 };
 
