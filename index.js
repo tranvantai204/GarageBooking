@@ -91,9 +91,10 @@ io.on('connection', (socket) => {
   // User joins with their ID (single handler)
   socket.on('join', async (userId) => {
     try {
-      connectedUsers.set(userId, socket.id);
-      socket.userId = userId;
-      console.log(`👤 User ${userId} joined with socket ${socket.id}`);
+      const userKey = String(userId);
+      connectedUsers.set(userKey, socket.id);
+      socket.userId = userKey;
+      console.log(`👤 User ${userKey} joined with socket ${socket.id}`);
 
       // Join user to their chat rooms
       const chats = await Chat.find({
@@ -116,15 +117,44 @@ io.on('connection', (socket) => {
   // Defensive: re-map on start_call if caller provided (single handler)
   socket.on('start_call', async (data) => {
     try {
-      const { targetUserId, channelName, caller } = data || {};
-      if (caller && caller.userId) {
-        connectedUsers.set(caller.userId, socket.id);
-      }
+      const { targetUserId, channelName, caller, callType } = data || {};
       if (!targetUserId || !channelName) return;
-      const targetSocketId = connectedUsers.get(targetUserId);
+
+      const callerUserId = caller?.userId ? String(caller.userId) : socket.userId;
+      if (callerUserId) {
+        connectedUsers.set(callerUserId, socket.id);
+      }
+
+      const targetSocketId = connectedUsers.get(String(targetUserId));
+
+      let callerInfo = caller || {};
+      if (!callerInfo?.name || !callerInfo?.avatarUrl) {
+        try {
+          const callerUser = await User.findById(callerUserId).select('hoTen vaiTro avatarUrl soDienThoai');
+          if (callerUser) {
+            callerInfo = {
+              userId: callerUserId,
+              name: callerUser.hoTen,
+              role: callerUser.vaiTro,
+              avatarUrl: callerUser.avatarUrl || '',
+              phone: callerUser.soDienThoai || ''
+            };
+          }
+        } catch (innerErr) {
+          console.error('Fetch caller info error:', innerErr);
+        }
+      }
+
       if (targetSocketId) {
-        io.to(targetSocketId).emit('incoming_call', { channelName, caller, targetUserId });
-        console.log(`📞 Incoming call to ${targetUserId} on channel ${channelName}`);
+        io.to(targetSocketId).emit('incoming_call', {
+          channelName,
+          caller: callerInfo,
+          targetUserId: String(targetUserId),
+          callType: callType || 'voice',
+          ringingTimeoutMs: 30000,
+          timestamp: Date.now()
+        });
+        console.log(`📞 Incoming call to ${targetUserId} on channel ${channelName} from ${callerUserId}`);
       } else {
         console.log(`⚠️ Target user ${targetUserId} is not connected`);
       }
@@ -451,7 +481,7 @@ io.on('connection', (socket) => {
     socket.on('cancel_call', (data) => {
       try {
         const { targetUserId, channelName } = data || {};
-        const targetSocketId = connectedUsers.get(targetUserId);
+        const targetSocketId = connectedUsers.get(String(targetUserId));
         if (targetSocketId) {
           io.to(targetSocketId).emit('call_cancelled', { channelName });
         }
@@ -484,7 +514,7 @@ io.on('connection', (socket) => {
     socket.on('accept_call', (data) => {
       try {
         const { callerUserId, channelName } = data || {};
-        const callerSocketId = connectedUsers.get(callerUserId);
+        const callerSocketId = connectedUsers.get(String(callerUserId));
         if (callerSocketId) {
           io.to(callerSocketId).emit('call_accepted', { channelName });
         }
@@ -497,7 +527,7 @@ io.on('connection', (socket) => {
     socket.on('decline_call', (data) => {
       try {
         const { callerUserId, channelName } = data || {};
-        const callerSocketId = connectedUsers.get(callerUserId);
+        const callerSocketId = connectedUsers.get(String(callerUserId));
         if (callerSocketId) {
           io.to(callerSocketId).emit('call_declined', { channelName });
         }
@@ -510,7 +540,7 @@ io.on('connection', (socket) => {
   socket.on('end_call', (data) => {
     try {
       const { peerUserId, channelName } = data || {};
-      const peerSocketId = connectedUsers.get(peerUserId);
+      const peerSocketId = connectedUsers.get(String(peerUserId));
       if (peerSocketId) {
         io.to(peerSocketId).emit('call_ended', { channelName });
       }
