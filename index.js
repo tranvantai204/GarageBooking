@@ -78,6 +78,8 @@ const Chat = require('./models/Chat');
 const Message = require('./models/Message');
 const User = require('./models/User');
 const PushToken = require('./models/PushToken');
+const Booking = require('./models/Booking');
+const Trip = require('./models/Trip');
 const admin = require('./init_fcm');
 
 // Store connected users
@@ -539,6 +541,44 @@ io.on('connection', (socket) => {
     }
   });
 });
+
+// Tự động giải phóng ghế sau 1 tiếng nếu chưa thanh toán
+const checkExpiredBookings = async () => {
+  try {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    
+    // Tìm các vé chưa thanh toán và đã quá 1 tiếng
+    const expiredBookings = await Booking.find({
+      trangThaiThanhToan: 'chua_thanh_toan',
+      createdAt: { $lt: oneHourAgo }
+    });
+
+    if (expiredBookings.length > 0) {
+      console.log(`⏰ [CLEANUP] Tìm thấy ${expiredBookings.length} vé quá hạn thanh toán. Đang giải phóng ghế...`);
+      
+      for (const booking of expiredBookings) {
+        // Giải phóng ghế trong Trip
+        const trip = await Trip.findById(booking.tripId);
+        if (trip) {
+          booking.danhSachGhe.forEach(tenGhe => {
+            const seat = trip.danhSachGhe.find(s => s.tenGhe === tenGhe);
+            if (seat) seat.trangThai = 'trong';
+          });
+          await trip.save();
+        }
+        
+        // Xóa vé quá hạn
+        await Booking.findByIdAndDelete(booking._id);
+        console.log(`✅ [CLEANUP] Đã giải phóng ghế cho vé: ${booking.maVe}`);
+      }
+    }
+  } catch (error) {
+    console.error('❌ [CLEANUP] Lỗi khi kiểm tra vé quá hạn:', error);
+  }
+};
+
+// Chạy kiểm tra mỗi phút
+setInterval(checkExpiredBookings, 60 * 1000);
 
 const PORT = process.env.PORT || 8080;
 
