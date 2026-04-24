@@ -1,7 +1,7 @@
 // File: routes/bookingRoutes.js
 const express = require('express');
 const router = express.Router();
-const { createBooking, getMyBookings, cancelBooking, checkInBooking, getTripPassengers, payBooking, getBookingByCode, cashConfirmBooking } = require('../controllers/bookingController');
+const { createBooking, getMyBookings, cancelBooking, checkInBooking, getTripPassengers, payBooking, getBookingByCode } = require('../controllers/bookingController');
 const { protect } = require('../middleware/authMiddleware'); // Import "người gác cổng"
 
 // Áp dụng middleware 'protect' cho tất cả các route bên dưới
@@ -14,6 +14,5 @@ router.route('/:id').delete(protect, cancelBooking);
 router.route('/:id/pay').post(protect, payBooking);
 // New endpoints for QR workflow
 router.route('/by-code/:code').get(protect, getBookingByCode);
-router.route('/cash-confirm').post(protect, cashConfirmBooking);
 
 module.exports = router;
