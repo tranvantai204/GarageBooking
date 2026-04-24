@@ -278,7 +278,10 @@ io.on('connection', (socket) => {
       await message.populate('replyTo', 'content senderName');
 
       // Emit message to all participants in the chat room
-      io.to(chatId).emit('new_message', message);
+      io.to(chatId).emit('new_message', {
+        ...message.toObject(),
+        tempId: data.tempId // Echo back tempId for optimistic UI update
+      });
 
       console.log(`💬 Message sent in chat ${chatId} by ${user.hoTen}`);
 
