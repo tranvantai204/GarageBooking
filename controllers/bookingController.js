@@ -326,6 +326,7 @@ exports.getTripPassengers = async (req, res) => {
         res.status(200).json({
             success: true,
             data: {
+                trip: bookings.length > 0 ? bookings[0].tripId : await Trip.findById(tripId).select('diemDi diemDen thoiGianKhoiHanh taiXe bienSoXe danhSachGhe'),
                 bookings,
                 statistics: {
                     totalBookings: bookings.length,
