@@ -3,6 +3,10 @@ const router = express.Router();
 const Refund = require('../models/RefundRequest');
 const Booking = require('../models/Booking');
 const User = require('../models/User');
+const { protect } = require('../middleware/authMiddleware');
+
+// Apply protect middleware to all refund routes
+router.use(protect);
 
 // Create refund request (user)
 router.post('/', async (req, res) => {
