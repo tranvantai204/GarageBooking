@@ -546,26 +546,39 @@ io.on('connection', (socket) => {
   });
 });
 
-// Tự động giải phóng ghế sau 1 tiếng nếu chưa thanh toán
+// Tự động giải phóng ghế sau 1 tiếng hoặc trước khi chạy 30 phút
 const checkExpiredBookings = async () => {
   try {
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const thirtyMinsLater = new Date(now.getTime() + 30 * 60 * 1000);
 
-    // Tìm các vé chưa thanh toán và đã quá 1 tiếng
-    const expiredBookings = await Booking.find({
+    // Tìm tất cả vé chưa thanh toán
+    const bookings = await Booking.find({
       trangThaiThanhToan: 'chua_thanh_toan',
-      createdAt: { $lt: oneHourAgo }
+    }).populate('tripId');
+
+    const toCancel = bookings.filter((b) => {
+      // Điều kiện 1: Quá 1 tiếng từ lúc đặt
+      if (b.createdAt < oneHourAgo) return true;
+
+      // Điều kiện 2: Chuyến đi bắt đầu trong vòng chưa đầy 30 phút nữa
+      if (b.tripId && b.tripId.thoiGianKhoiHanh) {
+        const departureTime = new Date(b.tripId.thoiGianKhoiHanh);
+        if (departureTime < thirtyMinsLater) return true;
+      }
+
+      return false;
     });
 
-    if (expiredBookings.length > 0) {
-      console.log(`⏰ [CLEANUP] Tìm thấy ${expiredBookings.length} vé quá hạn thanh toán. Đang giải phóng ghế...`);
+    if (toCancel.length > 0) {
+      console.log(`⏰ [CLEANUP] Tìm thấy ${toCancel.length} vé quá hạn. Đang giải phóng ghế...`);
 
-      for (const booking of expiredBookings) {
-        // Giải phóng ghế trong Trip
-        const trip = await Trip.findById(booking.tripId);
+      for (const booking of toCancel) {
+        const trip = booking.tripId;
         if (trip) {
-          booking.danhSachGhe.forEach(tenGhe => {
-            const seat = trip.danhSachGhe.find(s => s.tenGhe === tenGhe);
+          booking.danhSachGhe.forEach((tenGhe) => {
+            const seat = trip.danhSachGhe.find((s) => s.tenGhe === tenGhe);
             if (seat) seat.trangThai = 'trong';
           });
           await trip.save();
