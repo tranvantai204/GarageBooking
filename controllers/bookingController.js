@@ -248,11 +248,42 @@ exports.payBooking = async (req, res) => {
       }
       const user = await User.findById(booking.userId);
       if (!user) return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
-      if ((user.viSoDu || 0) < booking.tongTien) {
+      const paid = parseInt(booking.tongTien, 10) || 0;
+      if ((user.viSoDu || 0) < paid) {
         return res.status(400).json({ success: false, message: 'Số dư ví không đủ' });
       }
-      user.viSoDu = (user.viSoDu || 0) - booking.tongTien;
+      user.viSoDu = (user.viSoDu || 0) - paid;
       await user.save();
+
+      // Ghi nhận giao dịch ví
+      try {
+        const WalletTx = require('../models/WalletTransaction');
+        await WalletTx.create({
+          userId: user._id,
+          type: 'payment',
+          amount: paid,
+          ref: `WALLET-PAY-${booking.maVe}`,
+          description: `Thanh toán vé ${booking.maVe}`
+        });
+      } catch (e) { console.error('WalletTx error:', e); }
+
+      // Gửi thông báo
+      try {
+        const PushToken = require('../models/PushToken');
+        const admin = require('../init_fcm');
+        const tokenDoc = await PushToken.findOne({ userId: user._id });
+        if (tokenDoc?.token) {
+          await admin.messaging().send({
+            token: tokenDoc.token,
+            notification: { 
+              title: 'Thanh toán thành công', 
+              body: `Đã thanh toán ${paid.toLocaleString('vi-VN')}đ cho vé ${booking.maVe} bằng số dư ví` 
+            },
+            data: { type: 'booking_paid', bookingId: String(booking._id), maVe: booking.maVe },
+            android: { priority: 'high', notification: { channelId: 'general_notifications', priority: 'high' } }
+          });
+        }
+      } catch (e) { console.error('Push error:', e); }
     } else {
       if (!(isOwner || isAdmin)) {
         return res.status(403).json({ success: false, message: 'Không có quyền thanh toán vé này' });
@@ -263,7 +294,7 @@ exports.payBooking = async (req, res) => {
     booking.paymentRef = reference || undefined;
     booking.paidAt = new Date();
     await booking.save();
-    res.json({ success: true, message: 'Thanh toán thành công', data: booking });
+    res.json({ success: true, message: 'Thanh toán thành công', balance: method === 'wallet' ? (await User.findById(booking.userId)).viSoDu : undefined, data: booking });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
   }

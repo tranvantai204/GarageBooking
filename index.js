@@ -61,13 +61,14 @@ app.use('/api/wallet', walletRoutes);
 app.use('/uploads', express.static('uploads'));
 
 app.get('/', (req, res) => {
-    res.send('API for Ha Phuong App is running...');
+  res.send('API for Ha Phuong App is running...');
 });
 
 // Create HTTP server and Socket.IO
 const server = http.createServer(app);
 const io = socketIo(server, {
-  cors: {    origin: '*',
+  cors: {
+    origin: '*',
     methods: ['GET', 'POST'],
   },
   path: '/socket.io',
@@ -188,27 +189,27 @@ io.on('connection', (socket) => {
       console.error('start_call error:', err);
     }
   });
-  
-    // Trạng thái tin nhắn: delivered, seen
-    socket.on('message_delivered', (data) => {
-      // data: { chatId, messageId, userId }
-      io.to(data.chatId).emit('message_delivered', data);
-    });
-  
-    socket.on('message_seen', (data) => {
-      // data: { chatId, messageId, userId }
-      io.to(data.chatId).emit('message_seen', data);
-    });
-  
-    // Trạng thái đang soạn tin
-    socket.on('typing_start', (data) => {
-      io.to(data.chatId).emit('typing_start', { userId: socket.userId });
-    });
-    socket.on('typing_stop', (data) => {
-      io.to(data.chatId).emit('typing_stop', { userId: socket.userId });
-    });
-  
-    // (Removed duplicate join/disconnect handlers)
+
+  // Trạng thái tin nhắn: delivered, seen
+  socket.on('message_delivered', (data) => {
+    // data: { chatId, messageId, userId }
+    io.to(data.chatId).emit('message_delivered', data);
+  });
+
+  socket.on('message_seen', (data) => {
+    // data: { chatId, messageId, userId }
+    io.to(data.chatId).emit('message_seen', data);
+  });
+
+  // Trạng thái đang soạn tin
+  socket.on('typing_start', (data) => {
+    io.to(data.chatId).emit('typing_start', { userId: socket.userId });
+  });
+  socket.on('typing_stop', (data) => {
+    io.to(data.chatId).emit('typing_stop', { userId: socket.userId });
+  });
+
+  // (Removed duplicate join/disconnect handlers)
 
   // Handle sending messages
   socket.on('send_message', async (data) => {
@@ -449,67 +450,67 @@ io.on('connection', (socket) => {
     }
   });
 
-    // ===== Voice Call Signaling =====
-    // (start_call handled above)
+  // ===== Voice Call Signaling =====
+  // (start_call handled above)
 
-    // Caller cancels before connect
-    socket.on('cancel_call', (data) => {
-      try {
-        const { targetUserId, channelName } = data || {};
-        const targetSocketId = connectedUsers.get(targetUserId);
-        if (targetSocketId) {
-          io.to(targetSocketId).emit('call_cancelled', { channelName });
-        }
-        // Also send FCM to ensure callee sees cancel when app is background
-        (async () => {
-          try {
-            const tokenDoc = await PushToken.findOne({ userId: targetUserId });
-            const token = tokenDoc?.token;
-            if (token) {
-              await admin.messaging().send({
-                token,
-                data: { type: 'call_cancelled', channelName: String(channelName || '') },
-                android: { priority: 'high', notification: { channelId: 'incoming_call', priority: 'high' } },
-              });
-            } else {
-              await admin.messaging().send({
-                topic: `user_${String(targetUserId)}`,
-                data: { type: 'call_cancelled', channelName: String(channelName || '') },
-                android: { priority: 'high', notification: { channelId: 'incoming_call', priority: 'high' } },
-              });
-            }
-          } catch (e) {}
-        })();
-      } catch (err) {
-        console.error('cancel_call error:', err);
+  // Caller cancels before connect
+  socket.on('cancel_call', (data) => {
+    try {
+      const { targetUserId, channelName } = data || {};
+      const targetSocketId = connectedUsers.get(targetUserId);
+      if (targetSocketId) {
+        io.to(targetSocketId).emit('call_cancelled', { channelName });
       }
-    });
+      // Also send FCM to ensure callee sees cancel when app is background
+      (async () => {
+        try {
+          const tokenDoc = await PushToken.findOne({ userId: targetUserId });
+          const token = tokenDoc?.token;
+          if (token) {
+            await admin.messaging().send({
+              token,
+              data: { type: 'call_cancelled', channelName: String(channelName || '') },
+              android: { priority: 'high', notification: { channelId: 'incoming_call', priority: 'high' } },
+            });
+          } else {
+            await admin.messaging().send({
+              topic: `user_${String(targetUserId)}`,
+              data: { type: 'call_cancelled', channelName: String(channelName || '') },
+              android: { priority: 'high', notification: { channelId: 'incoming_call', priority: 'high' } },
+            });
+          }
+        } catch (e) { }
+      })();
+    } catch (err) {
+      console.error('cancel_call error:', err);
+    }
+  });
 
-    // Callee accepts
-    socket.on('accept_call', (data) => {
-      try {
-        const { callerUserId, channelName } = data || {};
-        const callerSocketId = connectedUsers.get(callerUserId);
-        if (callerSocketId) {
-          io.to(callerSocketId).emit('call_accepted', { channelName });
-        }
-      } catch (err) {
-        console.error('accept_call error:', err);
+  // Callee accepts
+  socket.on('accept_call', (data) => {
+    try {
+      const { callerUserId, channelName } = data || {};
+      const callerSocketId = connectedUsers.get(callerUserId);
+      if (callerSocketId) {
+        io.to(callerSocketId).emit('call_accepted', { channelName });
       }
-    });
+    } catch (err) {
+      console.error('accept_call error:', err);
+    }
+  });
 
-    // Callee declines
-    socket.on('decline_call', (data) => {
-      try {
-        const { callerUserId, channelName } = data || {};
-        const callerSocketId = connectedUsers.get(callerUserId);
-        if (callerSocketId) {
-          io.to(callerSocketId).emit('call_declined', { channelName });
-        }
-      } catch (err) {
-        console.error('decline_call error:', err);
+  // Callee declines
+  socket.on('decline_call', (data) => {
+    try {
+      const { callerUserId, channelName } = data || {};
+      const callerSocketId = connectedUsers.get(callerUserId);
+      if (callerSocketId) {
+        io.to(callerSocketId).emit('call_declined', { channelName });
       }
-    });
+    } catch (err) {
+      console.error('decline_call error:', err);
+    }
+  });
 
   // When either side ends the call, inform the peer to exit
   socket.on('end_call', (data) => {
@@ -537,7 +538,7 @@ io.on('connection', (socket) => {
               android: { priority: 'high', notification: { channelId: 'incoming_call', priority: 'high' } },
             });
           }
-        } catch (e) {}
+        } catch (e) { }
       })();
     } catch (err) {
       console.error('end_call error:', err);
@@ -549,7 +550,7 @@ io.on('connection', (socket) => {
 const checkExpiredBookings = async () => {
   try {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    
+
     // Tìm các vé chưa thanh toán và đã quá 1 tiếng
     const expiredBookings = await Booking.find({
       trangThaiThanhToan: 'chua_thanh_toan',
@@ -558,7 +559,7 @@ const checkExpiredBookings = async () => {
 
     if (expiredBookings.length > 0) {
       console.log(`⏰ [CLEANUP] Tìm thấy ${expiredBookings.length} vé quá hạn thanh toán. Đang giải phóng ghế...`);
-      
+
       for (const booking of expiredBookings) {
         // Giải phóng ghế trong Trip
         const trip = await Trip.findById(booking.tripId);
@@ -569,7 +570,7 @@ const checkExpiredBookings = async () => {
           });
           await trip.save();
         }
-        
+
         // Xóa vé quá hạn
         await Booking.findByIdAndDelete(booking._id);
         console.log(`✅ [CLEANUP] Đã giải phóng ghế cho vé: ${booking.maVe}`);

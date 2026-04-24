@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const axios = require('axios');
 const https = require('https');
 const dns = require('dns');
-try { dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']); } catch (_) {}
+try { dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']); } catch (_) { }
 const { URL } = require('url');
 // Robust import for different @payos/node versions/exports
 let _PayOSLib = {};
@@ -66,7 +66,7 @@ async function processTransactionPayload(payload) {
           android: { priority: 'high', notification: { channelId: 'general_notifications', priority: 'high' } },
         });
       }
-    } catch (_) {}
+    } catch (_) { }
     return { success: true, walletTopup: true, via: 'userId', balance: user.viSoDu };
   }
 
@@ -102,7 +102,7 @@ async function processTransactionPayload(payload) {
           android: { priority: 'high', notification: { channelId: 'general_notifications', priority: 'high' } },
         });
       }
-    } catch (_) {}
+    } catch (_) { }
     return { success: true, walletTopup: true, via: 'phone', phone, balance: user.viSoDu };
   }
 
@@ -131,7 +131,7 @@ async function processTransactionPayload(payload) {
     }
   }
 
-  if (!maVe && !orderCode) return { success: true, skipped: true, reason: `No booking code in description: ${desc.slice(0,120)}` };
+  if (!maVe && !orderCode) return { success: true, skipped: true, reason: `No booking code in description: ${desc.slice(0, 120)}` };
 
   if (orderCode) {
     // Map từ orderCode → booking nếu có PaymentRequest (tuỳ hệ thống)
@@ -141,7 +141,7 @@ async function processTransactionPayload(payload) {
         const booking = await Booking.findById(pr.bookingId);
         if (booking) maVe = booking.maVe;
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   if (!maVe) return { success: true, skipped: true, reason: 'Cannot resolve booking' };
@@ -176,7 +176,7 @@ async function processTransactionPayload(payload) {
         android: { priority: 'high', notification: { channelId: 'general_notifications', priority: 'high' } },
       });
     }
-  } catch (_) {}
+  } catch (_) { }
   return { success: true, updated: true, maVe };
 }
 
@@ -209,7 +209,7 @@ router.post('/webhook/casso', async (req, res) => {
       try {
         const parsed = JSON.parse(req.body);
         req.body = parsed;
-      } catch (_) {}
+      } catch (_) { }
     }
     const txRef = String(txnId || '').trim();
     // Only process credits to our MB account
@@ -271,7 +271,7 @@ router.post('/casso/sync', async (req, res) => {
         if (r.updated) updated += 1;
         if (r.duplicate) duplicates += 1;
         // trimmed: removed optional Discord posting
-      } catch (_) {}
+      } catch (_) { }
     }
     return res.json({ success: true, processed, updated, topups, duplicates });
   } catch (e) {
@@ -425,9 +425,9 @@ router.post('/payos/create-link', async (req, res) => {
                   httpsAgent: new https.Agent({ keepAlive: true, servername: host }),
                 });
                 return { ok: true, status: r2.status, json: r2.data, raw: r2.data };
-              } catch (_) {}
+              } catch (_) { }
             }
-          } catch (_) {}
+          } catch (_) { }
           return { ok: false, status, json: data, raw: data };
         }
       };
@@ -439,14 +439,14 @@ router.post('/payos/create-link', async (req, res) => {
       }
       checkoutUrl = attempt.json?.data?.checkoutUrl || attempt.json?.checkoutUrl || null;
       if (!attempt.ok || !checkoutUrl) {
-        try { console.error('PayOS create-link failed', { status: attempt.status, endpoint, data: attempt.json || attempt.raw, attempts: ['plain'] }); } catch (_) {}
+        try { console.error('PayOS create-link failed', { status: attempt.status, endpoint, data: attempt.json || attempt.raw, attempts: ['plain'] }); } catch (_) { }
         return res.status(400).json({ success: false, message: attempt.json?.message || 'PayOS create link failed', details: attempt.json || attempt.raw, request: { ...payload } });
       }
     }
     // Lưu mapping bookingId ↔ orderCode để xác nhận qua webhook
     try {
       await PaymentRequest.create({ orderCode, bookingId: type === 'booking' ? bookingId : undefined, amount: Number(finalAmount), status: 'pending' });
-    } catch (_) {}
+    } catch (_) { }
     return res.json({ success: true, data: { checkoutUrl, orderCode, addInfo, amount: finalAmount } });
   } catch (e) {
     return res.status(500).json({ success: false, message: e.message });
@@ -477,7 +477,7 @@ router.post('/payos/test', async (req, res) => {
         const resp = await instance.createPaymentLink(payload);
         checkoutUrl = resp?.data?.checkoutUrl || resp?.checkoutUrl || null;
       }
-    } catch (_) {}
+    } catch (_) { }
 
     // Fallback HTTP
     if (!checkoutUrl) {
@@ -495,7 +495,7 @@ router.post('/payos/test', async (req, res) => {
       });
       const raw = await httpResp.text();
       let data = {};
-      try { data = JSON.parse(raw || '{}'); } catch (_) {}
+      try { data = JSON.parse(raw || '{}'); } catch (_) { }
       checkoutUrl = data?.data?.checkoutUrl || data?.checkoutUrl || null;
       if (!httpResp.ok || !checkoutUrl) {
         return res.status(400).json({ success: false, message: data?.message || 'PayOS create link failed', details: { status: httpResp.status, endpoint, body: data || raw }, request: payload });
@@ -561,7 +561,7 @@ router.post('/webhook/payos', async (req, res) => {
           payos.webhooks.verify(body);
         }
       }
-    } catch (_) {}
+    } catch (_) { }
 
     const data = body.data || body;
     const description = data.description || data.orderDescription || '';
@@ -596,6 +596,80 @@ router.get('/payos', (req, res) => {
 });
 
 // trimmed: removed Discord sync route for simplicity
+
+// Thanh toán bằng số dư ví
+router.post('/wallet-pay', async (req, res) => {
+  try {
+    const { bookingId, userId } = req.body;
+    if (!bookingId || !userId) {
+      return res.status(400).json({ success: false, message: 'Thiếu thông tin booking hoặc user' });
+    }
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) return res.status(404).json({ success: false, message: 'Không tìm thấy vé' });
+    if (booking.trangThaiThanhToan === 'da_thanh_toan') {
+      return res.status(400).json({ success: false, message: 'Vé đã được thanh toán' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
+
+    const amount = parseInt(booking.tongTien, 10) || 0;
+    if ((user.viSoDu || 0) < amount) {
+      return res.status(400).json({ success: false, message: 'Số dư ví không đủ' });
+    }
+
+    // Trừ tiền trong ví
+    user.viSoDu -= amount;
+    await user.save();
+
+    // Cập nhật trạng thái vé
+    booking.trangThaiThanhToan = 'da_thanh_toan';
+    booking.paymentMethod = 'wallet';
+    booking.paidAt = new Date();
+    await booking.save();
+
+    // Ghi nhận giao dịch ví
+    await WalletTx.create({
+      userId: user._id,
+      type: 'payment',
+      amount: amount,
+      ref: `WALLET-PAY-${booking.maVe}`,
+      description: `Thanh toán vé ${booking.maVe}`
+    });
+
+    // Gửi thông báo
+    try {
+      const tokenDoc = await PushToken.findOne({ userId: user._id });
+      if (tokenDoc?.token) {
+        await admin.messaging().send({
+          token: tokenDoc.token,
+          notification: { 
+            title: 'Thanh toán thành công', 
+            body: `Đã thanh toán ${amount.toLocaleString('vi-VN')}đ cho vé ${booking.maVe} bằng số dư ví` 
+          },
+          data: { 
+            type: 'booking_paid', 
+            bookingId: String(booking._id), 
+            maVe: booking.maVe 
+          },
+          android: {
+            priority: 'high',
+            notification: { channelId: 'general_notifications', priority: 'high' }
+          }
+        });
+      }
+    } catch (_) { }
+
+    return res.json({ 
+      success: true, 
+      message: 'Thanh toán bằng ví thành công', 
+      balance: user.viSoDu 
+    });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+});
 
 module.exports = router;
 
