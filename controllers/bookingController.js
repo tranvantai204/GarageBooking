@@ -159,20 +159,26 @@ exports.cancelBooking = async (req, res) => {
 exports.checkInBooking = async (req, res) => {
     try {
         const { qrData } = req.body;
-        let parsedData;
-        try {
-            parsedData = typeof qrData === 'string' ? JSON.parse(qrData) : qrData;
-        } catch (e) {
-            if (typeof qrData === 'string' && qrData.trim()) {
-                parsedData = { maVe: qrData.trim() };
-            } else {
-                return res.status(400).json({ success: false, message: 'QR code không hợp lệ' });
+        let maVeStr = '';
+        if (typeof qrData === 'string' && qrData.includes('|')) {
+            const parts = qrData.split('|');
+            if (parts.length >= 2) maVeStr = parts[1].trim();
+        }
+
+        if (!maVeStr) {
+            let parsedData;
+            try {
+                parsedData = typeof qrData === 'string' ? JSON.parse(qrData) : qrData;
+                maVeStr = String(parsedData.maVe || '').trim();
+            } catch (e) {
+                if (typeof qrData === 'string' && qrData.trim()) {
+                    maVeStr = qrData.trim();
+                }
             }
         }
 
-        let maVeStr = String(parsedData.maVe || '').trim();
         if (!maVeStr) {
-            const rawStr = typeof qrData === 'string' ? qrData : JSON.stringify(parsedData);
+            const rawStr = typeof qrData === 'string' ? qrData : JSON.stringify(qrData);
             const normalized = String(rawStr || '').toUpperCase().replace(/\s+/g, '');
             let m = normalized.match(/HAPHUONG-?([0-9]{6,20})/);
             if (!m) {
