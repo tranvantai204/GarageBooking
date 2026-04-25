@@ -20,6 +20,28 @@ router.post('/', async (req, res) => {
     if (booking.trangThaiThanhToan !== 'da_thanh_toan') {
       return res.status(400).json({ success: false, message: 'Vé chưa thanh toán không thể hoàn' });
     }
+    const Trip = require('../models/Trip');
+    const trip = await Trip.findById(booking.tripId);
+    
+    const now = new Date();
+    const departureTime = new Date(trip.thoiGianKhoiHanh);
+    const timeDiff = departureTime.getTime() - now.getTime();
+    const hoursDiff = timeDiff / (1000 * 3600);
+    
+    // Check if this is a "Driver Fault" report
+    const isDriverFault = (reason && reason.includes('Tài xế không chạy')) || 
+                         trip.trangThai === 'da_huy_do_tre' || 
+                         (now > departureTime && trip.trangThai === 'chua_khoi_hanh');
+
+    if (!isDriverFault) {
+      if (now >= departureTime) {
+        return res.status(400).json({ success: false, message: 'Chuyến đi đã bắt đầu, không thể hoàn tiền' });
+      }
+      if (hoursDiff < 1) {
+        return res.status(400).json({ success: false, message: 'Chỉ có thể yêu cầu hoàn tiền trước 1 giờ khởi hành' });
+      }
+    }
+
     const exists = await Refund.findOne({ bookingId, status: 'pending' });
     if (exists) return res.json({ success: true, data: exists });
     const rr = await Refund.create({

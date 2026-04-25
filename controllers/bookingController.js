@@ -97,7 +97,7 @@ exports.createBooking = async (req, res) => {
 exports.getMyBookings = async (req, res) => {
     try {
         const bookings = await Booking.find({ userId: req.user._id })
-          .populate('tripId', 'diemDi diemDen thoiGianKhoiHanh taiXe bienSoXe loaiXe vehicleInfo')
+          .populate('tripId', 'diemDi diemDen thoiGianKhoiHanh taiXe bienSoXe loaiXe vehicleInfo trangThai')
           .sort({ createdAt: -1 });
         res.status(200).json({ success: true, count: bookings.length, data: bookings });
     } catch (error) {
@@ -124,8 +124,12 @@ exports.cancelBooking = async (req, res) => {
         const timeDiff = departureTime.getTime() - now.getTime();
         const hoursDiff = timeDiff / (1000 * 3600);
 
-        if (hoursDiff < 2 && req.user.vaiTro !== 'admin') {
-            return res.status(400).json({ success: false, message: 'Chỉ có thể hủy vé trước 2 giờ khởi hành' });
+        if (now >= departureTime && req.user.vaiTro !== 'admin') {
+            return res.status(400).json({ success: false, message: 'Chuyến đi đã bắt đầu, không thể hủy vé' });
+        }
+
+        if (hoursDiff < 1 && req.user.vaiTro !== 'admin') {
+            return res.status(400).json({ success: false, message: 'Chỉ có thể hủy vé trước 1 giờ khởi hành' });
         }
 
         if (booking.trangThaiThanhToan === 'da_thanh_toan' && req.user.vaiTro !== 'admin') {
