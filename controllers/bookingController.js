@@ -314,7 +314,10 @@ exports.getTripPassengers = async (req, res) => {
             return res.status(403).json({ success: false, message: 'Không có quyền truy cập' });
         }
 
-        const bookings = await Booking.find({ tripId })
+        const bookings = await Booking.find({ 
+            tripId, 
+            trangThaiThanhToan: 'da_thanh_toan' 
+        })
             .populate('userId', 'hoTen soDienThoai')
             .populate('tripId', 'diemDi diemDen thoiGianKhoiHanh taiXe bienSoXe danhSachGhe')
             .sort({ createdAt: 1 });
