@@ -9,7 +9,8 @@ const {
   updateTrip, 
   deleteTrip, 
   getTripsByDriver, 
-  getLateTrips 
+  getLateTrips,
+  getTripSummary
 } = require('../controllers/tripController');
 const { protect, isAdmin } = require('../middleware/authMiddleware');
 
@@ -21,6 +22,7 @@ router.route('/')
 // Place specific routes BEFORE param routes to avoid conflicts
 router.get('/late', protect, getLateTrips);
 router.get('/driver/:id/upcoming', getTripsByDriver);
+router.get('/:id/summary', protect, getTripSummary);
 
 router.route('/:id')
   .get(getTripById)
