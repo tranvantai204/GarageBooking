@@ -256,3 +256,100 @@ exports.deleteTrip = async (req, res) => {
     });
   }
 };
+
+// @desc    Lấy danh sách các chuyến trễ hoặc bị hủy do trễ
+// @route   GET /api/trips/late
+// @access  Private
+exports.getLateTrips = async (req, res) => {
+  try {
+    const now = new Date();
+    const { driverId } = req.query; // Nếu có driverId thì lọc theo tài xế
+
+    const query = {
+      $or: [
+        // 1) Chuyến trễ (quá giờ khởi hành nhưng chưa bắt đầu)
+        { trangThai: 'chua_khoi_hanh', thoiGianKhoiHanh: { $lt: now } },
+        // 2) Chuyến đã bị hủy tự động do quá trễ 1 tiếng
+        { trangThai: 'da_huy_do_tre' }
+      ]
+    };
+
+    if (driverId) {
+      // Handle both ObjectId and String comparison
+      if (mongoose.Types.ObjectId.isValid(driverId)) {
+        query.taiXeId = driverId;
+      } else {
+        // Fallback for cases where taiXeId might be stored differently or legacy
+        query.taiXeId = driverId;
+      }
+    }
+
+    const trips = await Trip.find(query).sort({ thoiGianKhoiHanh: -1 });
+
+    res.json({
+      success: true,
+      count: trips.length,
+      data: trips
+    });
+  } catch (error) {
+    console.error('getLateTrips error:', error);
+    res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+  }
+};
+
+// @desc    Lấy tổng kết chuyến đi (doanh thu + đánh giá)
+// @route   GET /api/trips/:id/summary
+// @access  Private
+exports.getTripSummary = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const trip = await Trip.findById(id);
+
+    if (!trip) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy chuyến đi' });
+    }
+
+    const Booking = require('../models/Booking');
+    const bookings = await Booking.find({ 
+      tripId: id, 
+      trangThaiThanhToan: 'da_thanh_toan' 
+    }).populate('userId', 'hoTen soDienThoai');
+
+    // Tính doanh thu
+    const totalRevenue = bookings.reduce((sum, b) => sum + (b.tongTien || 0), 0);
+
+    // Lọc các đánh giá (nếu có lưu trong Booking)
+    const feedbacks = bookings
+      .filter(b => b.danhGia)
+      .map(b => ({
+        userName: b.userId?.hoTen || 'Khách hàng',
+        rating: b.danhGia,
+        comment: b.binhLuan,
+        seats: b.danhSachGhe,
+        time: b.updatedAt
+      }));
+
+    // Tính đánh giá trung bình
+    const avgRating = feedbacks.length > 0 
+      ? feedbacks.reduce((sum, f) => sum + f.rating, 0) / feedbacks.length 
+      : 0;
+
+    res.json({
+      success: true,
+      data: {
+        tripId: trip._id,
+        diemDi: trip.diemDi,
+        diemDen: trip.diemDen,
+        thoiGianKhoiHanh: trip.thoiGianKhoiHanh,
+        trangThai: trip.trangThai,
+        totalRevenue,
+        avgRating: parseFloat(avgRating.toFixed(1)),
+        feedbackCount: feedbacks.length,
+        feedbacks
+      }
+    });
+  } catch (error) {
+    console.error('getTripSummary error:', error);
+    res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+  }
+};

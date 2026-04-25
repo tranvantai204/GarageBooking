@@ -55,6 +55,8 @@ const bookingSchema = new mongoose.Schema({
 bookingSchema.add({
   voucherCode: { type: String },
   discountAmount: { type: Number, default: 0 },
+  danhGia: { type: Number, min: 1, max: 5 }, // 1-5 sao
+  binhLuan: { type: String },
   thongTinKhachHang: {
     hoTen: { type: String },
     soDienThoai: { type: String },

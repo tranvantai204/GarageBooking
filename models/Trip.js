@@ -62,7 +62,7 @@ const tripSchema = new mongoose.Schema({
   },
   trangThai: {
     type: String,
-    enum: ['chua_khoi_hanh', 'dang_di', 'da_hoan_thanh', 'da_huy'],
+    enum: ['chua_khoi_hanh', 'dang_di', 'da_hoan_thanh', 'da_huy', 'da_huy_do_tre'],
     default: 'chua_khoi_hanh'
   },
   // End-trip tracking info

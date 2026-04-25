@@ -379,3 +379,41 @@ exports.getBookingByCode = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
   }
 };
+
+// @desc    Gửi đánh giá và bình luận cho vé
+// @route   POST /api/bookings/:id/feedback
+// @access  Private
+exports.submitFeedback = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { danhGia, binhLuan } = req.body;
+
+    if (!danhGia || danhGia < 1 || danhGia > 5) {
+      return res.status(400).json({ success: false, message: 'Vui lòng cung cấp số sao từ 1 đến 5' });
+    }
+
+    const booking = await Booking.findById(id).populate('tripId');
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy vé' });
+    }
+
+    // Kiểm tra quyền (chủ sở hữu vé)
+    if (booking.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Không có quyền đánh giá vé này' });
+    }
+
+    // Chỉ cho phép đánh giá khi chuyến đi đã hoàn thành
+    if (booking.tripId.trangThai !== 'da_hoan_thanh') {
+      return res.status(400).json({ success: false, message: 'Chỉ có thể đánh giá sau khi chuyến đi kết thúc' });
+    }
+
+    booking.danhGia = danhGia;
+    booking.binhLuan = binhLuan || '';
+    await booking.save();
+
+    res.json({ success: true, message: 'Cảm ơn bạn đã đánh giá!', data: booking });
+  } catch (error) {
+    console.error('submitFeedback error:', error);
+    res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+  }
+};

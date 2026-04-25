@@ -597,6 +597,63 @@ io.on('connection', (socket) => {
   });
 });
 
+// Tự động kiểm tra các chuyến trễ hoặc không chạy
+const checkLateTrips = async () => {
+  try {
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+
+    // 1) Tìm các chuyến chưa khởi hành mà đã quá giờ
+    const lateTrips = await Trip.find({
+      trangThai: 'chua_khoi_hanh',
+      thoiGianKhoiHanh: { $lt: now }
+    });
+
+    for (const trip of lateTrips) {
+      const departureTime = new Date(trip.thoiGianKhoiHanh);
+      
+      if (departureTime < oneHourAgo) {
+        // Trễ hơn 1 tiếng -> Hủy do không xuất phát
+        trip.trangThai = 'da_huy_do_tre';
+        await trip.save();
+        console.log(`🚫 [CLEANUP] Chuyến ${trip._id} đã bị hủy do trễ hơn 1 tiếng không chạy.`);
+        
+        // Notify admin
+        try {
+          const admins = await User.find({ vaiTro: 'admin' }).select('_id');
+          const tokens = await PushToken.find({ userId: { $in: admins.map(a => a._id) } });
+          const tokenList = tokens.map(t => t.token).filter(Boolean);
+          if (tokenList.length > 0) {
+            await admin.messaging().sendEachForMulticast({
+              tokens: tokenList,
+              notification: {
+                title: 'HỦY CHUYẾN: Không xuất phát',
+                body: `Chuyến ${trip.diemDi} - ${trip.diemDen} lúc ${departureTime.toLocaleTimeString()} đã bị hủy do trễ quá 1 tiếng.`
+              },
+              data: { type: 'trip_cancelled_late', tripId: String(trip._id) }
+            });
+          }
+        } catch (e) {}
+      } else {
+        // Trễ dưới 1 tiếng -> Chỉ thông báo cảnh báo (nếu chưa thông báo)
+        // (Có thể thêm flag isLateNotificationSent nếu muốn tránh spam, 
+        // nhưng ở đây ta cứ log và có thể gửi socket cho admin dashboard)
+        io.emit('trip_late_warning', { 
+          tripId: trip._id, 
+          diemDi: trip.diemDi, 
+          diemDen: trip.diemDen,
+          delayMins: Math.floor((now - departureTime) / 60000)
+        });
+      }
+    }
+  } catch (error) {
+    console.error('❌ [CLEANUP] Lỗi khi kiểm tra chuyến trễ:', error);
+  }
+};
+
+// Chạy kiểm tra mỗi 5 phút cho chuyến trễ
+setInterval(checkLateTrips, 5 * 60 * 1000);
+
 // Tự động giải phóng ghế sau 1 tiếng hoặc trước khi chạy 30 phút
 const checkExpiredBookings = async () => {
   try {
