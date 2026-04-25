@@ -1,6 +1,7 @@
 // File: controllers/tripController.js
 
 const Trip = require('../models/Trip');
+const User = require('../models/User');
 const mongoose = require('mongoose');
 
 // @desc    Admin tạo chuyến đi mới
@@ -275,39 +276,35 @@ exports.getLateTrips = async (req, res) => {
     let filter = { ...baseQuery };
 
     if (driverId) {
-      const User = require('../models/User');
-      const user = await User.findById(driverId);
-      
       const driverFilters = [];
+      
+      // 1. Filter by ID if valid
       if (mongoose.Types.ObjectId.isValid(driverId)) {
         driverFilters.push({ taiXeId: driverId });
+        
+        // 2. Also try to find by Name if user exists
+        try {
+          const user = await User.findById(driverId);
+          if (user && user.hoTen) {
+            driverFilters.push({ taiXe: user.hoTen });
+            driverFilters.push({ taiXe: new RegExp(user.hoTen, 'i') });
+          }
+        } catch (e) {
+          console.error('Error finding user for late trips:', e);
+        }
       } else {
+        // If not a valid ObjectId, just try a direct string match (unlikely to work for taiXeId but safe)
         driverFilters.push({ taiXeId: driverId });
       }
 
-      if (user && user.hoTen) {
-        driverFilters.push({ taiXe: user.hoTen });
-        // Also handle case-insensitive or partial matches if needed
-        driverFilters.push({ taiXe: new RegExp(user.hoTen, 'i') });
+      if (driverFilters.length > 0) {
+        filter = {
+          $and: [
+            baseQuery,
+            { $or: driverFilters }
+          ]
+        };
       }
-
-      filter = {
-        ...baseQuery,
-        $or: [
-          ...baseQuery.$or,
-          { $and: [ { $or: driverFilters } ] } // This logic is slightly wrong, let's fix it
-        ]
-      };
-      
-      // Correct logic: (status is late OR status is cancelled) AND (taiXeId is ID OR taiXe is Name)
-      filter = {
-        $and: [
-          baseQuery,
-          {
-            $or: driverFilters
-          }
-        ]
-      };
     }
 
     const trips = await Trip.find(filter).sort({ thoiGianKhoiHanh: -1 });
