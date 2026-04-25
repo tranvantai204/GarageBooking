@@ -263,28 +263,54 @@ exports.deleteTrip = async (req, res) => {
 exports.getLateTrips = async (req, res) => {
   try {
     const now = new Date();
-    const { driverId } = req.query; // Nếu có driverId thì lọc theo tài xế
+    const { driverId } = req.query;
 
-    const query = {
+    const baseQuery = {
       $or: [
-        // 1) Chuyến trễ (quá giờ khởi hành nhưng chưa bắt đầu)
         { trangThai: 'chua_khoi_hanh', thoiGianKhoiHanh: { $lt: now } },
-        // 2) Chuyến đã bị hủy tự động do quá trễ 1 tiếng
         { trangThai: 'da_huy_do_tre' }
       ]
     };
 
+    let filter = { ...baseQuery };
+
     if (driverId) {
-      // Handle both ObjectId and String comparison
+      const User = require('../models/User');
+      const user = await User.findById(driverId);
+      
+      const driverFilters = [];
       if (mongoose.Types.ObjectId.isValid(driverId)) {
-        query.taiXeId = driverId;
+        driverFilters.push({ taiXeId: driverId });
       } else {
-        // Fallback for cases where taiXeId might be stored differently or legacy
-        query.taiXeId = driverId;
+        driverFilters.push({ taiXeId: driverId });
       }
+
+      if (user && user.hoTen) {
+        driverFilters.push({ taiXe: user.hoTen });
+        // Also handle case-insensitive or partial matches if needed
+        driverFilters.push({ taiXe: new RegExp(user.hoTen, 'i') });
+      }
+
+      filter = {
+        ...baseQuery,
+        $or: [
+          ...baseQuery.$or,
+          { $and: [ { $or: driverFilters } ] } // This logic is slightly wrong, let's fix it
+        ]
+      };
+      
+      // Correct logic: (status is late OR status is cancelled) AND (taiXeId is ID OR taiXe is Name)
+      filter = {
+        $and: [
+          baseQuery,
+          {
+            $or: driverFilters
+          }
+        ]
+      };
     }
 
-    const trips = await Trip.find(query).sort({ thoiGianKhoiHanh: -1 });
+    const trips = await Trip.find(filter).sort({ thoiGianKhoiHanh: -1 });
 
     res.json({
       success: true,
