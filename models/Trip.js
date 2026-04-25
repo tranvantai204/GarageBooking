@@ -64,7 +64,15 @@ const tripSchema = new mongoose.Schema({
     type: String,
     enum: ['chua_khoi_hanh', 'dang_di', 'da_hoan_thanh', 'da_huy'],
     default: 'chua_khoi_hanh'
-  }
+  },
+  // End-trip tracking info
+  actualEndTime: { type: Date },
+  endLocation: {
+    lat: { type: Number },
+    lng: { type: Number }
+  },
+  isEarlyEnd: { type: Boolean, default: false },
+  distanceToDestAtEnd: { type: Number } // in meters
 }, {
   timestamps: true, // Tự động thêm createdAt, updatedAt
 });

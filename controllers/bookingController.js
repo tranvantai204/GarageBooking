@@ -319,7 +319,7 @@ exports.getTripPassengers = async (req, res) => {
             trangThaiThanhToan: 'da_thanh_toan' 
         })
             .populate('userId', 'hoTen soDienThoai')
-            .populate('tripId', 'diemDi diemDen thoiGianKhoiHanh taiXe bienSoXe danhSachGhe')
+            .populate('tripId', 'diemDi diemDen thoiGianKhoiHanh taiXe bienSoXe danhSachGhe actualEndTime endLocation isEarlyEnd distanceToDestAtEnd')
             .sort({ createdAt: 1 });
 
         const totalPassengers = bookings.reduce((sum, booking) => sum + booking.danhSachGhe.length, 0);

@@ -416,11 +416,62 @@ io.on('connection', (socket) => {
 
   socket.on('trip_ended', async (data) => {
     try {
-      const { tripId, driverId } = data || {};
-      io.emit('trip_status_update', { tripId, driverId, status: 'ended', ts: Date.now() });
+      const { tripId, driverId, endLat, endLng, endTime, isEarlyEnd, distanceToDest } = data || {};
+      
+      // Update Trip status in DB
+      const trip = await Trip.findById(tripId);
+      if (trip) {
+        trip.trangThai = 'da_hoan_thanh';
+        trip.actualEndTime = endTime ? new Date(endTime) : new Date();
+        if (endLat && endLng) {
+          trip.endLocation = { lat: endLat, lng: endLng };
+        }
+        trip.isEarlyEnd = !!isEarlyEnd;
+        trip.distanceToDestAtEnd = distanceToDest;
+        await trip.save();
+      }
+
+      io.emit('trip_status_update', { 
+        tripId, 
+        driverId, 
+        status: 'ended', 
+        isEarlyEnd, 
+        endLat, 
+        endLng, 
+        ts: Date.now() 
+      });
+
+      // Push notification to admins if ended early
+      if (isEarlyEnd) {
+        try {
+          const admins = await User.find({ vaiTro: 'admin' }).select('_id');
+          const adminIds = admins.map(u => String(u._id));
+          if (adminIds.length > 0) {
+            const tokens = await PushToken.find({ userId: { $in: adminIds } });
+            const tokenList = tokens.map(t => t.token).filter(Boolean);
+            if (tokenList.length > 0) {
+              await admin.messaging().sendEachForMulticast({
+                tokens: tokenList,
+                notification: {
+                  title: 'CẢNH BÁO: Chuyến kết thúc sớm',
+                  body: `Tài xế ${driverId} kết thúc chuyến ${tripId} khi chưa đến đích (${Math.round(distanceToDest)}m).`
+                },
+                data: { 
+                  type: 'trip_early_end', 
+                  tripId: String(tripId), 
+                  driverId: String(driverId),
+                  endLat: String(endLat || ''),
+                  endLng: String(endLng || '')
+                },
+                android: { priority: 'high', notification: { channelId: 'general_notifications', priority: 'high' } }
+              });
+            }
+          }
+        } catch (pushErr) { console.error('Early end push error:', pushErr); }
+      }
+
       // Gửi FCM tới khách đã check-in để mời đánh giá
       try {
-        const Booking = require('./models/Booking');
         const bookings = await Booking.find({ tripId, trangThaiCheckIn: 'da_check_in' }).select('userId');
         const userIds = bookings.map((b) => String(b.userId));
         if (userIds.length > 0) {
