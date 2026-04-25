@@ -273,13 +273,37 @@ exports.getLateTrips = async (req, res) => {
       ]
     };
 
-    // Sử dụng baseQuery trực tiếp để tài xế có thể thấy toàn bộ chuyến trễ của nhà xe
-    const filter = baseQuery;
+    let filter = { ...baseQuery };
 
-    // Tăng tốc độ bằng lean() và limit
+    if (driverId && driverId !== 'null' && driverId !== 'undefined') {
+      const driverFilters = [];
+      
+      if (mongoose.Types.ObjectId.isValid(driverId)) {
+        // 1. Khớp theo ID tài xế
+        driverFilters.push({ taiXeId: driverId });
+        
+        // 2. Khớp theo Tên tài xế (lấy từ User profile) để tránh sai sót khi Admin nhập tay tên
+        const user = await User.findById(driverId).select('hoTen').lean();
+        if (user && user.hoTen) {
+          const escapedName = user.hoTen.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          driverFilters.push({ taiXe: new RegExp(`^${escapedName}$`, 'i') });
+          driverFilters.push({ taiXe: user.hoTen });
+        }
+      } else {
+        // Nếu driverId truyền vào là một chuỗi tên (không phải ObjectId)
+        driverFilters.push({ taiXe: new RegExp(driverId, 'i') });
+      }
+
+      filter = {
+        $and: [
+          baseQuery,
+          { $or: driverFilters }
+        ]
+      };
+    }
+
     const trips = await Trip.find(filter)
       .sort({ thoiGianKhoiHanh: -1 })
-      .limit(50)
       .lean();
 
     res.json({

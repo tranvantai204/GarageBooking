@@ -33,7 +33,12 @@ router.post('/validate', protect, async (req, res) => {
   const { code, amount, route } = req.body || {};
   const v = await Voucher.findOne({ code, active: true });
   if (!v) {
-    return res.status(400).json({ success: false, message: 'Voucher không hợp lệ' });
+    return res.status(400).json({ success: false, message: 'Voucher không hợp lệ hoặc đã bị vô hiệu hóa' });
+  }
+
+  // Kiểm tra số lượng lượt dùng còn lại (quota)
+  if (v.quota > 0 && v.used >= v.quota) {
+    return res.status(400).json({ success: false, message: 'Mã giảm giá này đã hết lượt sử dụng' });
   }
   const now = new Date();
   const start = new Date(v.startAt);

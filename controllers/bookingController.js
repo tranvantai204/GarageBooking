@@ -16,6 +16,46 @@ exports.createBooking = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Không tìm thấy chuyến đi' });
     }
 
+    // 1. Kiểm tra thời gian khởi hành (Chặn đặt vé dưới 1 tiếng)
+    const now = new Date();
+    const departureTime = new Date(trip.thoiGianKhoiHanh);
+    const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+    
+    if (departureTime < oneHourFromNow) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Chuyến đi sắp khởi hành (trong vòng 1 tiếng), không thể đặt vé qua ứng dụng. Vui lòng liên hệ trực tiếp nhà xe.' 
+      });
+    }
+
+    // 2. Kiểm tra Voucher (Xác thực lại trên Server)
+    let appliedDiscount = 0;
+    if (voucherCode) {
+      const Voucher = require('../models/Voucher');
+      const v = await Voucher.findOne({ code: voucherCode, active: true });
+      if (!v) {
+        return res.status(400).json({ success: false, message: 'Mã giảm giá không hợp lệ hoặc đã bị vô hiệu hóa' });
+      }
+      
+      // Kiểm tra quota
+      if (v.quota > 0 && v.used >= v.quota) {
+        return res.status(400).json({ success: false, message: 'Mã giảm giá đã hết lượt sử dụng' });
+      }
+
+      // Kiểm tra hạn dùng
+      const start = new Date(v.startAt);
+      const end = new Date(v.endAt);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      if (now < start || now > end) {
+        return res.status(400).json({ success: false, message: 'Mã giảm giá đã hết hạn sử dụng' });
+      }
+
+      // Tính toán lại discountAmount để đảm bảo tính chính xác
+      // (Không tin tưởng hoàn toàn vào discountAmount từ client gửi lên)
+      // Tạm thời tính toán cơ bản, logic đầy đủ sẽ nằm ở bước tính tổng tiền dưới đây
+    }
+
     let tongTien = 0;
     const gheHopLe = [];
 
@@ -28,6 +68,18 @@ exports.createBooking = async (req, res) => {
 
     if (gheHopLe.length !== danhSachGheDat.length) {
       return res.status(400).json({ success: false, message: 'Một hoặc nhiều ghế đã được đặt hoặc không hợp lệ. Vui lòng thử lại.' });
+    }
+
+    // Tính toán discountAmount thực tế
+    if (voucherCode) {
+      const Voucher = require('../models/Voucher');
+      const v = await Voucher.findOne({ code: voucherCode });
+      appliedDiscount = v.type === 'percent' ? (tongTien * v.value) / 100 : v.value;
+      if (v.maxDiscount) appliedDiscount = Math.min(appliedDiscount, v.maxDiscount);
+      
+      // Tăng số lần sử dụng voucher
+      v.used = (v.used || 0) + 1;
+      await v.save();
     }
 
     gheHopLe.forEach(seat => {
@@ -54,7 +106,7 @@ exports.createBooking = async (req, res) => {
       tripId,
       userId: req.user._id,
       danhSachGhe: danhSachGheDat,
-      tongTien: Math.max(0, tongTien - (parseInt(discountAmount) || 0)),
+      tongTien: Math.max(0, tongTien - appliedDiscount),
       maVe: maVe,
       qrCode: qrCodeString,
       loaiDiemDon: loaiDiemDon || 'ben_xe',
@@ -62,7 +114,7 @@ exports.createBooking = async (req, res) => {
       ghiChuDiemDon: ghiChuDiemDon,
     };
     if (voucherCode) bookingPayload.voucherCode = voucherCode;
-    if (discountAmount) bookingPayload.discountAmount = parseInt(discountAmount);
+    if (appliedDiscount > 0) bookingPayload.discountAmount = appliedDiscount;
     if (thongTinKhachHang && typeof thongTinKhachHang === 'object') {
       bookingPayload.thongTinKhachHang = thongTinKhachHang;
     }
