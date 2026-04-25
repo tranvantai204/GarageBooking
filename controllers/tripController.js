@@ -278,36 +278,34 @@ exports.getLateTrips = async (req, res) => {
     if (driverId) {
       const driverFilters = [];
       
-      // 1. Filter by ID if valid
       if (mongoose.Types.ObjectId.isValid(driverId)) {
+        // Tìm theo ID trực tiếp
         driverFilters.push({ taiXeId: driverId });
         
-        // 2. Also try to find by Name if user exists
-        try {
-          const user = await User.findById(driverId);
-          if (user && user.hoTen) {
-            driverFilters.push({ taiXe: user.hoTen });
-            driverFilters.push({ taiXe: new RegExp(user.hoTen, 'i') });
-          }
-        } catch (e) {
-          console.error('Error finding user for late trips:', e);
+        // Tìm theo tên (lấy từ User profile) để bao quát các chuyến cũ chưa có ID
+        const user = await User.findById(driverId).select('hoTen').lean();
+        if (user && user.hoTen) {
+          const escapedName = user.hoTen.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          driverFilters.push({ taiXe: new RegExp(`^${escapedName}$`, 'i') });
+          driverFilters.push({ taiXe: user.hoTen });
         }
       } else {
-        // If not a valid ObjectId, just try a direct string match (unlikely to work for taiXeId but safe)
-        driverFilters.push({ taiXeId: driverId });
+        driverFilters.push({ taiXe: driverId });
       }
 
-      if (driverFilters.length > 0) {
-        filter = {
-          $and: [
-            baseQuery,
-            { $or: driverFilters }
-          ]
-        };
-      }
+      filter = {
+        $and: [
+          baseQuery,
+          { $or: driverFilters }
+        ]
+      };
     }
 
-    const trips = await Trip.find(filter).sort({ thoiGianKhoiHanh: -1 });
+    // Tăng tốc độ bằng lean() và limit
+    const trips = await Trip.find(filter)
+      .sort({ thoiGianKhoiHanh: -1 })
+      .limit(50)
+      .lean();
 
     res.json({
       success: true,
