@@ -6,7 +6,8 @@ const {
   paySalary,
   requestWithdrawal,
   getWithdrawalRequests,
-  processWithdrawal
+  processWithdrawal,
+  fixBalance
 } = require('../controllers/walletController');
 
 // User & Driver routes
@@ -17,5 +18,7 @@ router.post('/withdraw', protect, requestWithdrawal);
 router.post('/pay-salary', protect, isAdmin, paySalary);
 router.get('/admin/withdrawals', protect, isAdmin, getWithdrawalRequests);
 router.put('/admin/withdrawals/:id', protect, isAdmin, processWithdrawal);
+router.post('/admin/fix-balance/:id', protect, isAdmin, fixBalance);
+
 
 module.exports = router;

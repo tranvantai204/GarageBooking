@@ -33,10 +33,17 @@ exports.getMyWallet = async (req, res) => {
 // @access  Private/Admin
 exports.paySalary = async (req, res) => {
   try {
-    const { driverId, amount, note } = req.body;
+    const { driverId, note } = req.body;
+    let { amount } = req.body;
 
-    if (!driverId || !amount || amount <= 0) {
-      return res.status(400).json({ success: false, message: 'Thông tin không hợp lệ' });
+    // Filter non-numeric characters (except for the first dot if any)
+    if (typeof amount === 'string') {
+      amount = amount.replace(/[^\d]/g, '');
+    }
+    const numAmount = Number(amount);
+
+    if (!driverId || !numAmount || numAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'Số tiền không hợp lệ' });
     }
 
     const driver = await User.findById(driverId);
@@ -44,21 +51,24 @@ exports.paySalary = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Không tìm thấy tài xế' });
     }
 
+    // Ensure viSoDu is a valid number before calculation
+    const currentBalance = isNaN(driver.viSoDu) || driver.viSoDu === null ? 0 : driver.viSoDu;
+
     // Update balance
-    driver.viSoDu = (driver.viSoDu || 0) + Number(amount);
+    driver.viSoDu = currentBalance + numAmount;
     await driver.save();
 
     // Create transaction record
     await WalletTx.create({
       userId: driverId,
       type: 'salary',
-      amount: Number(amount),
+      amount: numAmount,
       ref: note || 'Phát lương/hoa hồng'
     });
 
     res.json({ 
       success: true, 
-      message: `Đã phát ${amount.toLocaleString()}đ cho ${driver.hoTen}`,
+      message: `Đã phát ${numAmount.toLocaleString()}đ cho ${driver.hoTen}`,
       newBalance: driver.viSoDu
     });
   } catch (error) {
@@ -137,18 +147,20 @@ exports.processWithdrawal = async (req, res) => {
 
     if (status === 'completed') {
       // Final deduction of balance
-      if (user.viSoDu < request.amount) {
+      const currentBalance = isNaN(user.viSoDu) || user.viSoDu === null ? 0 : user.viSoDu;
+      
+      if (currentBalance < request.amount) {
         return res.status(400).json({ success: false, message: 'Số dư người dùng hiện tại không đủ để thực hiện rút tiền' });
       }
 
-      user.viSoDu -= request.amount;
+      user.viSoDu = currentBalance - request.amount;
       await user.save();
 
       // Create transaction
       await WalletTx.create({
         userId: user._id,
         type: 'withdrawal',
-        amount: -request.amount,
+        amount: -Number(request.amount),
         ref: `Rút tiền về ${request.bankName} - ${request.accountNumber}`
       });
 
@@ -166,3 +178,25 @@ exports.processWithdrawal = async (req, res) => {
     res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
   }
 };
+
+// @desc    Admin fix corrupted balance (NaN/Null)
+// @route   POST /api/wallet/admin/fix-balance/:id
+// @access  Private/Admin
+exports.fixBalance = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
+
+    if (isNaN(user.viSoDu) || user.viSoDu === null) {
+      user.viSoDu = 0;
+      await user.save();
+      return res.json({ success: true, message: 'Đã khôi phục số dư về 0đ (do dữ liệu cũ bị hỏng)' });
+    }
+
+    res.json({ success: true, message: 'Số dư vẫn ổn định, không cần sửa' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+  }
+};
+
