@@ -13,6 +13,7 @@ router.route('/trip/:tripId/passengers').get(protect, getTripPassengers);
 router.route('/:id').delete(protect, cancelBooking);
 router.route('/:id/pay').post(protect, payBooking);
 router.route('/:id/feedback').post(protect, submitFeedback);
+router.route('/:id/drop-off').put(protect, require('../controllers/bookingController').updateDropOffLocation);
 // New endpoints for QR workflow
 router.route('/by-code/:code').get(protect, getBookingByCode);
 

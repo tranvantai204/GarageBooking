@@ -473,3 +473,41 @@ exports.submitFeedback = async (req, res) => {
     res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
   }
 };
+
+// @desc    Cập nhật điểm trả khách
+// @route   PUT /api/bookings/:id/drop-off
+// @access  Private
+exports.updateDropOffLocation = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { diemTraKhach, toaDoTraKhach } = req.body;
+
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy vé' });
+    }
+
+    // Chỉ cho phép người sở hữu vé hoặc admin/tài xế cập nhật
+    const isOwner = booking.userId.toString() === req.user._id.toString();
+    const isStaff = ['admin', 'tai_xe', 'driver'].includes(req.user.vaiTro);
+
+    if (!isOwner && !isStaff) {
+      return res.status(403).json({ success: false, message: 'Không có quyền cập nhật' });
+    }
+
+    booking.diemTraKhach = diemTraKhach;
+    if (toaDoTraKhach) {
+      booking.toaDoTraKhach = toaDoTraKhach;
+    }
+
+    await booking.save();
+
+    res.json({
+      success: true,
+      message: 'Cập nhật điểm xuống xe thành công',
+      data: booking
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+  }
+};

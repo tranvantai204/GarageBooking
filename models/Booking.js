@@ -39,6 +39,13 @@ const bookingSchema = new mongoose.Schema({
   thoiGianCheckIn: { type: Date }, // Thời gian check-in
   nguoiCheckIn: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Tài xế check-in
 
+  // Thông tin điểm trả khách (cập nhật sau check-in)
+  diemTraKhach: { type: String },
+  toaDoTraKhach: {
+    lat: { type: Number },
+    lng: { type: Number }
+  },
+
   // Thông tin điểm đón
   loaiDiemDon: {
     type: String,

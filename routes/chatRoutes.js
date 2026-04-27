@@ -22,6 +22,9 @@ router.route('/')
 router.route('/create')
   .post(createOrGetChat);
 
+router.route('/trip/:tripId')
+  .get(chatController.getTripGroupChat);
+
 // Debug route - list all chats
 router.route('/debug/all')
   .get(getAllChats);

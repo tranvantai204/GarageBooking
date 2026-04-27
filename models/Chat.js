@@ -45,6 +45,14 @@ const chatSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  isGroup: {
+    type: Boolean,
+    default: false
+  },
+  tripId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Trip'
+  },
   createdAt: {
     type: Date,
     default: Date.now

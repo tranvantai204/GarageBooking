@@ -215,6 +215,86 @@ exports.createOrGetChat = async (req, res) => {
   }
 };
 
+exports.getTripGroupChat = async (req, res) => {
+  try {
+    const { tripId } = req.params;
+    const userId = req.user.id;
+
+    if (!tripId) {
+      return res.status(400).json({ success: false, message: 'Trip ID is required' });
+    }
+
+    // Find trip to get route info
+    const Trip = require('../models/Trip');
+    const trip = await Trip.findById(tripId);
+    if (!trip) {
+      return res.status(404).json({ success: false, message: 'Trip not found' });
+    }
+
+    // Check if trip group chat already exists
+    let chat = await Chat.findOne({
+      tripId: tripId,
+      isGroup: true,
+      isActive: true
+    });
+
+    if (!chat) {
+      // Create new group chat for the trip
+      // Initially, only the driver is a participant if exists, 
+      // but users join when they open the chat
+      const driver = await User.findById(trip.taiXeId);
+      
+      const participants = [];
+      if (driver) {
+        participants.push({
+          userId: driver._id,
+          name: driver.hoTen,
+          role: 'driver'
+        });
+      }
+
+      chat = new Chat({
+        isGroup: true,
+        tripId: tripId,
+        participants: participants,
+        unreadCount: new Map()
+      });
+
+      await chat.save();
+    }
+
+    // Add current user to participants if not already there
+    const isParticipant = chat.participants.some(p => p.userId.toString() === userId);
+    if (!isParticipant) {
+      const user = await User.findById(userId);
+      chat.participants.push({
+        userId: user._id,
+        name: user.hoTen,
+        role: user.vaiTro
+      });
+      chat.unreadCount.set(userId, 0);
+      await chat.save();
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: chat._id,
+        name: `Nhóm Chuyến: ${trip.diemDi} - ${trip.diemDen}`,
+        tripId: chat.tripId,
+        isGroup: true
+      }
+    });
+  } catch (error) {
+    console.error('Get trip group chat error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi server',
+      error: error.message
+    });
+  }
+};
+
 // Debug API - List all chats
 exports.getAllChats = async (req, res) => {
   try {
