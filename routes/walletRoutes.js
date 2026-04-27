@@ -1,16 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/authMiddleware');
-const WalletTx = require('../models/WalletTransaction');
-const User = require('../models/User');
+const { protect, isAdmin } = require('../middleware/authMiddleware');
+const {
+  getMyWallet,
+  paySalary,
+  requestWithdrawal,
+  getWithdrawalRequests,
+  processWithdrawal
+} = require('../controllers/walletController');
 
-// Get my wallet balance and last transactions
-router.get('/me', protect, async (req, res) => {
-  const user = await User.findById(req.user._id).select('viSoDu');
-  const txs = await WalletTx.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(50);
-  res.json({ success: true, data: { balance: user?.viSoDu || 0, transactions: txs } });
-});
+// User & Driver routes
+router.get('/me', protect, getMyWallet);
+router.post('/withdraw', protect, requestWithdrawal);
+
+// Admin only routes
+router.post('/pay-salary', protect, isAdmin, paySalary);
+router.get('/admin/withdrawals', protect, isAdmin, getWithdrawalRequests);
+router.put('/admin/withdrawals/:id', protect, isAdmin, processWithdrawal);
 
 module.exports = router;
-
-
