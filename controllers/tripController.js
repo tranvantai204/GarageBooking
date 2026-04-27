@@ -89,11 +89,17 @@ exports.findTrips = async (req, res) => {
 
     console.log('🔍 Search params:', { diemDi, diemDen, ngayDi });
 
-    // Nếu không có tham số tìm kiếm, trả về tất cả chuyến đi
+    // Nếu không có tham số tìm kiếm, trả về các chuyến từ 1 ngày trước đến tương lai
     if (!diemDi && !diemDen && !ngayDi) {
-      console.log('📋 Getting all trips...');
-      const trips = await Trip.find({});
-      console.log(`✅ Found ${trips.length} trips`);
+      console.log('📋 Getting recent and upcoming trips (from 1 day ago)...');
+      const oneDayAgo = new Date();
+      oneDayAgo.setDate(oneDayAgo.getDate() - 1); // Trừ đi 1 ngày
+
+      const trips = await Trip.find({
+        thoiGianKhoiHanh: { $gte: oneDayAgo }
+      }).sort({ thoiGianKhoiHanh: 1 }); // Sắp xếp theo thời gian khởi hành tăng dần
+
+      console.log(`✅ Found ${trips.length} recent/upcoming trips`);
       return res.status(200).json({ success: true, count: trips.length, data: trips });
     }
 
