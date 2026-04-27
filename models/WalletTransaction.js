@@ -7,8 +7,10 @@ const walletTxSchema = new mongoose.Schema({
   ref: { type: String },
 }, { timestamps: true });
 
+// Index for fast lookup by user
+walletTxSchema.index({ userId: 1, createdAt: -1 });
+
 // Avoid double processing by enforcing uniqueness for (type, ref) when ref exists
-// This makes topup/payment idempotent across retries provided the provider sends the same txnId
 walletTxSchema.index(
   { type: 1, ref: 1 },
   { unique: true, partialFilterExpression: { ref: { $exists: true, $ne: '' } } }

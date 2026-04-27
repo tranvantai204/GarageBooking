@@ -200,3 +200,20 @@ exports.fixBalance = async (req, res) => {
   }
 };
 
+// @desc    Admin lấy toàn bộ lịch sử giao dịch hệ thống
+// @route   GET /api/wallet/admin/transactions
+// @access  Private/Admin
+exports.getAllTransactions = async (req, res) => {
+  try {
+    const txs = await WalletTx.find({})
+      .populate('userId', 'hoTen soDienThoai vaiTro')
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    res.json({ success: true, data: txs });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+  }
+};
+
+

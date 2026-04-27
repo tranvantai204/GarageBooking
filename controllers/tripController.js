@@ -270,11 +270,13 @@ exports.deleteTrip = async (req, res) => {
 exports.getLateTrips = async (req, res) => {
   try {
     const now = new Date();
+    // Thêm 5 phút đệm để bắt đầu cảnh báo sớm hoặc bù đắp lệch múi giờ
+    const alertThreshold = new Date(now.getTime() + 5 * 60000); 
     const { driverId } = req.query;
 
     const baseQuery = {
       $or: [
-        { trangThai: 'chua_khoi_hanh', thoiGianKhoiHanh: { $lt: now } },
+        { trangThai: 'chua_khoi_hanh', thoiGianKhoiHanh: { $lt: alertThreshold } },
         { trangThai: 'da_huy_do_tre' }
       ]
     };
