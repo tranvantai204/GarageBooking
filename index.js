@@ -116,6 +116,18 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Also handle join_chat event so clients can join a specific chat room
+  socket.on('join_chat', async (data) => {
+    try {
+      const chatId = data?.chatId || data?.chatRoomId;
+      if (!chatId) return;
+      socket.join(chatId);
+      console.log(`📱 Socket ${socket.id} joined specific chat room ${chatId}`);
+    } catch (error) {
+      console.error('join_chat error:', error);
+    }
+  });
+
   // Defensive: re-map on start_call if caller provided (single handler)
   socket.on('start_call', async (data) => {
     try {
