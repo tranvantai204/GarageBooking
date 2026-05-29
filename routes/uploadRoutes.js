@@ -116,6 +116,57 @@ router.post('/images', protect, upload.array('images', 5), (req, res) => {
   }
 });
 
+// @desc    Upload avatar and save to user profile
+// @route   POST /api/upload/avatar
+// @access  Private
+const User = require('../models/User');
+router.post('/avatar', protect, upload.single('avatar'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Không có file được upload'
+      });
+    }
+    
+    const avatarUrl = `/uploads/${req.file.filename}`;
+    
+    // Save avatarUrl to user in DB
+    const user = await User.findByIdAndUpdate(
+      req.user._id || req.user.id,
+      { avatarUrl, updatedAt: new Date() },
+      { new: true, select: '-matKhau' }
+    );
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy người dùng'
+      });
+    }
+    
+    console.log(`✅ Avatar updated for user ${user._id}: ${avatarUrl}`);
+    
+    return res.status(200).json({
+      success: true,
+      data: {
+        avatarUrl: avatarUrl,
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+        size: req.file.size
+      },
+      message: 'Cập nhật ảnh đại diện thành công'
+    });
+  } catch (error) {
+    console.error('Avatar upload error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi upload ảnh đại diện',
+      error: error.message
+    });
+  }
+});
+
 // Error handling middleware for multer
 router.use((error, req, res, next) => {
   if (res.headersSent) {
