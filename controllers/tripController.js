@@ -90,15 +90,14 @@ exports.bulkGenerateTrips = async (req, res) => {
       diemDen,
       soGhe,
       giaVe,
-      soChuyenMoiNgay,  // Số chuyến mỗi ngày (vd: 10)
-      soNgay,           // Số ngày liên tục (vd: 15)
-      ngayBatDau,       // ISO date string: ngày bắt đầu
-      gioKhoiHanhDau,   // Giờ chuyến đầu tiên trong ngày, vd: "05:00"
+      soChuyenMoiNgay,
+      soNgay,
+      firstTripTime, // ISO date string of the VERY FIRST trip, in UTC
       loaiXe,
       vehicleId,
     } = req.body;
 
-    if (!diemDi || !diemDen || !soGhe || !giaVe || !soChuyenMoiNgay || !soNgay || !ngayBatDau) {
+    if (!diemDi || !diemDen || !soGhe || !giaVe || !soChuyenMoiNgay || !soNgay || !firstTripTime) {
       return res.status(400).json({ success: false, message: 'Thiếu thông tin bắt buộc' });
     }
 
@@ -111,9 +110,6 @@ exports.bulkGenerateTrips = async (req, res) => {
 
     // Khoảng cách giữa 2 chuyến (phút) = 24h / số chuyến
     const intervalMinutes = Math.floor((24 * 60) / soChuyenInt);
-
-    // Parse giờ khởi hành đầu tiên
-    const [startHour, startMin] = (gioKhoiHanhDau || '05:00').split(':').map(Number);
 
     // Lấy vehicle info nếu có
     let vehicleInfo = null;
@@ -148,13 +144,13 @@ exports.bulkGenerateTrips = async (req, res) => {
 
     // Sinh tất cả chuyến đi
     const tripsToCreate = [];
-    const startDate = new Date(ngayBatDau);
+    const startTimeMs = new Date(firstTripTime).getTime();
 
     for (let day = 0; day < soNgayInt; day++) {
       for (let trip = 0; trip < soChuyenInt; trip++) {
-        const thoiGian = new Date(startDate);
-        thoiGian.setDate(thoiGian.getDate() + day);
-        thoiGian.setHours(startHour, startMin + trip * intervalMinutes, 0, 0);
+        // Tịnh tiến thời gian: + day (24h) + trip (intervalMinutes)
+        const timeOffset = (day * 24 * 60 * 60 * 1000) + (trip * intervalMinutes * 60 * 1000);
+        const thoiGian = new Date(startTimeMs + timeOffset);
 
         const tripData = {
           diemDi,
