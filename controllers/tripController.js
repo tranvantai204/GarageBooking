@@ -80,6 +80,116 @@ exports.createTrip = async (req, res) => {
   }
 };
 
+// @desc    Admin tự động tạo nhiều chuyến theo lịch
+// @route   POST /api/trips/bulk-generate
+// @access  Private/Admin
+exports.bulkGenerateTrips = async (req, res) => {
+  try {
+    const {
+      diemDi,
+      diemDen,
+      soGhe,
+      giaVe,
+      soChuyenMoiNgay,  // Số chuyến mỗi ngày (vd: 10)
+      soNgay,           // Số ngày liên tục (vd: 15)
+      ngayBatDau,       // ISO date string: ngày bắt đầu
+      gioKhoiHanhDau,   // Giờ chuyến đầu tiên trong ngày, vd: "05:00"
+      loaiXe,
+      vehicleId,
+    } = req.body;
+
+    if (!diemDi || !diemDen || !soGhe || !giaVe || !soChuyenMoiNgay || !soNgay || !ngayBatDau) {
+      return res.status(400).json({ success: false, message: 'Thiếu thông tin bắt buộc' });
+    }
+
+    const soChuyenInt = parseInt(soChuyenMoiNgay);
+    const soNgayInt = parseInt(soNgay);
+
+    if (soChuyenInt < 1 || soNgayInt < 1) {
+      return res.status(400).json({ success: false, message: 'Số chuyến và số ngày phải >= 1' });
+    }
+
+    // Khoảng cách giữa 2 chuyến (phút) = 24h / số chuyến
+    const intervalMinutes = Math.floor((24 * 60) / soChuyenInt);
+
+    // Parse giờ khởi hành đầu tiên
+    const [startHour, startMin] = (gioKhoiHanhDau || '05:00').split(':').map(Number);
+
+    // Lấy vehicle info nếu có
+    let vehicleInfo = null;
+    let resolvedBienSo = 'Chưa cập nhật';
+    let resolvedLoaiXe = loaiXe || 'ghe_ngoi';
+
+    if (vehicleId) {
+      try {
+        const Vehicle = require('../models/Vehicle');
+        const v = await Vehicle.findById(vehicleId);
+        if (v) {
+          vehicleInfo = {
+            tenXe: v.tenXe,
+            hangXe: v.hangXe,
+            bienSoXe: v.bienSoXe,
+            hinhAnh: Array.isArray(v.hinhAnh) ? v.hinhAnh : [],
+          };
+          resolvedBienSo = v.bienSoXe || resolvedBienSo;
+          resolvedLoaiXe = v.loaiXe || resolvedLoaiXe;
+        }
+      } catch (e) {}
+    }
+
+    // Tạo danh sách ghế mẫu
+    const makeSeatList = () => {
+      const seats = [];
+      for (let i = 1; i <= soGhe; i++) {
+        seats.push({ tenGhe: `A${i}`, trangThai: 'trong', giaVe });
+      }
+      return seats;
+    };
+
+    // Sinh tất cả chuyến đi
+    const tripsToCreate = [];
+    const startDate = new Date(ngayBatDau);
+
+    for (let day = 0; day < soNgayInt; day++) {
+      for (let trip = 0; trip < soChuyenInt; trip++) {
+        const thoiGian = new Date(startDate);
+        thoiGian.setDate(thoiGian.getDate() + day);
+        thoiGian.setHours(startHour, startMin + trip * intervalMinutes, 0, 0);
+
+        const tripData = {
+          diemDi,
+          diemDen,
+          thoiGianKhoiHanh: thoiGian,
+          soGhe,
+          danhSachGhe: makeSeatList(),
+          taiXe: 'Chưa cập nhật',
+          bienSoXe: resolvedBienSo,
+          loaiXe: resolvedLoaiXe,
+        };
+        if (vehicleId) tripData.vehicleId = vehicleId;
+        if (vehicleInfo) tripData.vehicleInfo = vehicleInfo;
+
+        tripsToCreate.push(tripData);
+      }
+    }
+
+    // Tạo tất cả trong 1 lần (insertMany nhanh hơn)
+    const created = await Trip.insertMany(tripsToCreate);
+    console.log(`✅ Bulk created ${created.length} trips`);
+
+    res.status(201).json({
+      success: true,
+      message: `Đã tạo thành công ${created.length} chuyến đi`,
+      count: created.length,
+      data: created,
+    });
+
+  } catch (error) {
+    console.error('bulkGenerateTrips error:', error);
+    res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+  }
+};
+
 // @desc    Người dùng tìm kiếm các chuyến đi
 // @route   GET /api/trips
 // @access  Public

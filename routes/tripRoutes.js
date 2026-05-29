@@ -10,7 +10,8 @@ const {
   deleteTrip, 
   getTripsByDriver, 
   getLateTrips,
-  getTripSummary
+  getTripSummary,
+  bulkGenerateTrips
 } = require('../controllers/tripController');
 const { protect, isAdmin } = require('../middleware/authMiddleware');
 
@@ -20,6 +21,7 @@ router.route('/')
   .get(findTrips);
 
 // Place specific routes BEFORE param routes to avoid conflicts
+router.post('/bulk-generate', protect, isAdmin, bulkGenerateTrips);
 router.get('/late', protect, getLateTrips);
 router.get('/driver/:id/upcoming', getTripsByDriver);
 router.get('/:id/summary', protect, getTripSummary);
