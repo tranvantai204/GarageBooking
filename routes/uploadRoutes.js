@@ -2,29 +2,14 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
+const axios = require('axios');
+const FormData = require('form-data');
 const { protect } = require('../middleware/authMiddleware');
 
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
+// Cấu hình multer để lưu file vào bộ nhớ đệm (RAM) thay vì ổ cứng
+const storage = multer.memoryStorage();
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    // Generate unique filename
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const fileExtension = path.extname(file.originalname);
-    cb(null, file.fieldname + '-' + uniqueSuffix + fileExtension);
-  }
-});
-
-// File filter for images (accept wide range, including emulator/desktop picks)
+// File filter for images
 const imageFilter = (req, file, cb) => {
   try {
     const allowedExt = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic', '.heif'];
@@ -44,29 +29,56 @@ const upload = multer({
   storage: storage,
   fileFilter: imageFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024 // Increase to 10MB to reduce 500 on large images
+    fileSize: 10 * 1024 * 1024 // Giới hạn 10MB
   }
 });
+
+// ImgBB API Key
+const IMGBB_API_KEY = '8bab664a9875c6df6e198f4763a20c22';
+
+// Hàm helper để up ảnh lên ImgBB
+const uploadToImgBB = async (fileBuffer, originalname) => {
+  try {
+    const base64Image = fileBuffer.toString('base64');
+    
+    // Sử dụng FormData
+    const form = new FormData();
+    form.append('key', IMGBB_API_KEY);
+    form.append('image', base64Image);
+    form.append('name', originalname.split('.')[0]); // Optional: tên file
+
+    const response = await axios.post('https://api.imgbb.com/1/upload', form, {
+      headers: {
+        ...form.getHeaders()
+      }
+    });
+
+    if (response.data && response.data.success) {
+      return response.data.data.url; // Trả về link trực tiếp của ảnh
+    }
+    throw new Error('ImgBB API trả về lỗi');
+  } catch (error) {
+    console.error('ImgBB Upload Error:', error.response?.data || error.message);
+    throw error;
+  }
+};
 
 // @desc    Upload single image
 // @route   POST /api/upload/image
 // @access  Private
-router.post('/image', protect, upload.single('image'), (req, res) => {
+router.post('/image', protect, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'Không có file được upload'
-      });
+      return res.status(400).json({ success: false, message: 'Không có file được upload' });
     }
     
-    const imageUrl = `/uploads/${req.file.filename}`;
+    const imageUrl = await uploadToImgBB(req.file.buffer, req.file.originalname);
     
     return res.status(200).json({
       success: true,
       data: {
         imageUrl: imageUrl,
-        filename: req.file.filename,
+        filename: req.file.originalname,
         originalName: req.file.originalname,
         size: req.file.size
       },
@@ -74,32 +86,29 @@ router.post('/image', protect, upload.single('image'), (req, res) => {
     });
   } catch (error) {
     console.error('Upload error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Lỗi upload ảnh',
-      error: error.message
-    });
+    return res.status(500).json({ success: false, message: 'Lỗi upload ảnh', error: error.message });
   }
 });
 
 // @desc    Upload multiple images
 // @route   POST /api/upload/images
 // @access  Private
-router.post('/images', protect, upload.array('images', 5), (req, res) => {
+router.post('/images', protect, upload.array('images', 5), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Không có file được upload'
-      });
+      return res.status(400).json({ success: false, message: 'Không có file được upload' });
     }
     
-    const uploadedFiles = req.files.map(file => ({
-      imageUrl: `/uploads/${file.filename}`,
-      filename: file.filename,
-      originalName: file.originalname,
-      size: file.size
-    }));
+    const uploadedFiles = [];
+    for (const file of req.files) {
+      const url = await uploadToImgBB(file.buffer, file.originalname);
+      uploadedFiles.push({
+        imageUrl: url,
+        filename: file.originalname,
+        originalName: file.originalname,
+        size: file.size
+      });
+    }
     
     return res.status(200).json({
       success: true,
@@ -108,11 +117,7 @@ router.post('/images', protect, upload.array('images', 5), (req, res) => {
     });
   } catch (error) {
     console.error('Upload error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Lỗi upload ảnh',
-      error: error.message
-    });
+    return res.status(500).json({ success: false, message: 'Lỗi upload ảnh', error: error.message });
   }
 });
 
@@ -123,13 +128,10 @@ const User = require('../models/User');
 router.post('/avatar', protect, upload.single('avatar'), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'Không có file được upload'
-      });
+      return res.status(400).json({ success: false, message: 'Không có file được upload' });
     }
     
-    const avatarUrl = `/uploads/${req.file.filename}`;
+    const avatarUrl = await uploadToImgBB(req.file.buffer, req.file.originalname);
     
     // Save avatarUrl to user in DB
     const user = await User.findByIdAndUpdate(
@@ -139,10 +141,7 @@ router.post('/avatar', protect, upload.single('avatar'), async (req, res) => {
     );
     
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy người dùng'
-      });
+      return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
     }
     
     console.log(`✅ Avatar updated for user ${user._id}: ${avatarUrl}`);
@@ -151,7 +150,7 @@ router.post('/avatar', protect, upload.single('avatar'), async (req, res) => {
       success: true,
       data: {
         avatarUrl: avatarUrl,
-        filename: req.file.filename,
+        filename: req.file.originalname,
         originalName: req.file.originalname,
         size: req.file.size
       },
@@ -159,11 +158,7 @@ router.post('/avatar', protect, upload.single('avatar'), async (req, res) => {
     });
   } catch (error) {
     console.error('Avatar upload error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Lỗi upload ảnh đại diện',
-      error: error.message
-    });
+    return res.status(500).json({ success: false, message: 'Lỗi upload ảnh đại diện', error: error.message });
   }
 });
 
@@ -174,17 +169,10 @@ router.use((error, req, res, next) => {
   }
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({
-        success: false,
-        message: 'File quá lớn. Giới hạn 5MB'
-      });
+      return res.status(400).json({ success: false, message: 'File quá lớn. Giới hạn 10MB' });
     }
   }
-  
-  return res.status(500).json({
-    success: false,
-    message: error.message || 'Lỗi upload file'
-  });
+  return res.status(500).json({ success: false, message: error.message || 'Lỗi upload file' });
 });
 
 module.exports = router;
