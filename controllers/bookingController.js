@@ -149,7 +149,7 @@ exports.createBooking = async (req, res) => {
 exports.getMyBookings = async (req, res) => {
     try {
         const bookings = await Booking.find({ userId: req.user._id })
-          .populate('tripId', 'diemDi diemDen thoiGianKhoiHanh taiXe bienSoXe loaiXe vehicleInfo trangThai')
+          .populate('tripId', 'diemDi diemDen thoiGianKhoiHanh taiXe taiXeId bienSoXe loaiXe vehicleInfo trangThai')
           .sort({ createdAt: -1 });
         res.status(200).json({ success: true, count: bookings.length, data: bookings });
     } catch (error) {
@@ -458,14 +458,34 @@ exports.submitFeedback = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Không có quyền đánh giá vé này' });
     }
 
-    // Chỉ cho phép đánh giá khi chuyến đi đã hoàn thành
-    if (booking.tripId.trangThai !== 'da_hoan_thanh') {
-      return res.status(400).json({ success: false, message: 'Chỉ có thể đánh giá sau khi chuyến đi kết thúc' });
+    // Đánh giá đã có rồi
+    if (booking.danhGia) {
+      return res.status(400).json({ success: false, message: 'Bạn đã đánh giá chuyến đi này rồi' });
     }
 
     booking.danhGia = danhGia;
     booking.binhLuan = binhLuan || '';
     await booking.save();
+
+    // Also create Feedback doc for driver rating display
+    try {
+      const Feedback = require('../models/Feedback');
+      const driverId = booking.tripId?.taiXeId;
+      if (driverId) {
+        await Feedback.create({
+          tripId: booking.tripId._id || booking.tripId,
+          bookingId: booking._id,
+          userId: booking.userId,
+          driverId: driverId,
+          ratingDriver: danhGia,
+          ratingTrip: danhGia,
+          comment: binhLuan || '',
+          status: 'approved',
+        });
+      }
+    } catch (e) {
+      console.error('Feedback auto-create error:', e);
+    }
 
     res.json({ success: true, message: 'Cảm ơn bạn đã đánh giá!', data: booking });
   } catch (error) {

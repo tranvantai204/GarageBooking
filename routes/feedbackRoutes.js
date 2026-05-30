@@ -19,6 +19,15 @@ router.post('/', protect, async (req, res) => {
       payload.driverId = t?.taiXeId;
     }
     const fb = await Feedback.create(payload);
+    
+    // Update booking record to show it was rated
+    if (payload.bookingId) {
+      await Booking.findByIdAndUpdate(payload.bookingId, {
+        danhGia: payload.ratingDriver || payload.ratingTrip,
+        binhLuan: payload.comment
+      });
+    }
+    
     res.status(201).json({ success: true, data: fb });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
@@ -51,6 +60,7 @@ router.get('/driver/:driverId/summary', async (req, res) => {
   try {
     const { driverId } = req.params;
     const items = await Feedback.find({ driverId, ratingDriver: { $gte: 1 } })
+      .populate('userId', 'hoTen avatarUrl')
       .sort({ createdAt: -1 })
       .limit(50);
     const count = await Feedback.countDocuments({ driverId, ratingDriver: { $gte: 1 } });

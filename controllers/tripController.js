@@ -95,6 +95,8 @@ exports.bulkGenerateTrips = async (req, res) => {
       firstTripTime, // ISO date string of the VERY FIRST trip, in UTC
       loaiXe,
       vehicleId,
+      taiXeId,
+      taiXeName,
     } = req.body;
 
     if (!diemDi || !diemDen || !soGhe || !giaVe || !soChuyenMoiNgay || !soNgay || !firstTripTime) {
@@ -133,6 +135,13 @@ exports.bulkGenerateTrips = async (req, res) => {
       } catch (e) {}
     }
 
+    // Lấy danh sách tài xế nếu chọn random
+    let driversList = [];
+    if (taiXeId === 'random') {
+      const User = require('../models/User');
+      driversList = await User.find({ $or: [{ vaiTro: 'tai_xe' }, { vaiTro: 'driver' }] });
+    }
+
     // Tạo danh sách ghế mẫu
     const makeSeatList = () => {
       const seats = [];
@@ -152,16 +161,29 @@ exports.bulkGenerateTrips = async (req, res) => {
         const timeOffset = (day * 24 * 60 * 60 * 1000) + (trip * intervalMinutes * 60 * 1000);
         const thoiGian = new Date(startTimeMs + timeOffset);
 
+        let currentTaiXeName = taiXeName || 'Chưa cập nhật';
+        let currentTaiXeId = taiXeId && taiXeId !== 'random' ? taiXeId : undefined;
+        
+        if (taiXeId === 'random' && driversList.length > 0) {
+           const randomDriver = driversList[Math.floor(Math.random() * driversList.length)];
+           currentTaiXeName = randomDriver.hoTen;
+           currentTaiXeId = randomDriver._id;
+           // If we pick a random driver, also pick their vehicle if they have one? 
+           // Usually drivers have a bienSoXe assigned.
+           if (randomDriver.bienSoXe) resolvedBienSo = randomDriver.bienSoXe;
+        }
+
         const tripData = {
           diemDi,
           diemDen,
           thoiGianKhoiHanh: thoiGian,
           soGhe,
           danhSachGhe: makeSeatList(),
-          taiXe: 'Chưa cập nhật',
+          taiXe: currentTaiXeName,
           bienSoXe: resolvedBienSo,
           loaiXe: resolvedLoaiXe,
         };
+        if (currentTaiXeId) tripData.taiXeId = currentTaiXeId;
         if (vehicleId) tripData.vehicleId = vehicleId;
         if (vehicleInfo) tripData.vehicleInfo = vehicleInfo;
 
