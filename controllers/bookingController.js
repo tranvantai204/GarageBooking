@@ -157,6 +157,22 @@ exports.getMyBookings = async (req, res) => {
     }
 }
 
+// @desc    Lấy tất cả vé (Admin)
+exports.getAllBookings = async (req, res) => {
+    try {
+        if (req.user.vaiTro !== 'admin') {
+            return res.status(403).json({ success: false, message: 'Không có quyền truy cập' });
+        }
+        const bookings = await Booking.find({})
+          .populate('tripId', 'diemDi diemDen thoiGianKhoiHanh taiXe taiXeId bienSoXe loaiXe vehicleInfo trangThai')
+          .populate('userId', 'hoTen soDienThoai email')
+          .sort({ createdAt: -1 });
+        res.status(200).json({ success: true, count: bookings.length, data: bookings });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+    }
+}
+
 // @desc    Hủy vé
 exports.cancelBooking = async (req, res) => {
     try {
