@@ -8,7 +8,9 @@ const {
   getMessages,
   sendMessage,
   getAllChats,
-  deleteMessage
+  deleteMessage,
+  deleteChat,
+  deleteTripGroupChat,
 } = chatController;
 const { protect } = require('../middleware/authMiddleware');
 
@@ -25,14 +27,22 @@ router.route('/create')
 router.route('/trip/:tripId')
   .get(chatController.getTripGroupChat);
 
+// Xóa group chat của chuyến đi (gọi khi hoàn thành chuyến)
+router.delete('/trip/:tripId/group', deleteTripGroupChat);
+
 // Debug route - list all chats
 router.route('/debug/all')
   .get(getAllChats);
 
-  router.route('/:chatId/messages')
-    .get(getMessages)
-    .post(sendMessage);
-  router.delete('/messages/:id', chatController.deleteMessage);
+router.route('/:chatId/messages')
+  .get(getMessages)
+  .post(sendMessage);
+
+// Xóa một tin nhắn
+router.delete('/messages/:id', deleteMessage);
+
+// Xóa cả đoạn chat
+router.delete('/:chatId', deleteChat);
 
 router.get('/user/:id/activity-status', require('../controllers/authController').getUserActivityStatus);
 module.exports = router;

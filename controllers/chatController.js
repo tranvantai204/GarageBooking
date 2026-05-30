@@ -562,3 +562,42 @@ exports.deleteMessage = async (req, res) => {
     res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
   }
 };
+
+// Xóa đoạn chat (soft-delete: đặt isActive = false)
+exports.deleteChat = async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const userId = req.user.id;
+
+    const chat = await Chat.findOne({ _id: chatId, 'participants.userId': userId });
+    if (!chat) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy đoạn chat' });
+    }
+
+    await Chat.updateOne({ _id: chatId }, { $set: { isActive: false, updatedAt: new Date() } });
+    console.log(`✅ Chat ${chatId} deleted (soft) by user ${userId}`);
+
+    res.json({ success: true, message: 'Xóa đoạn chat thành công' });
+  } catch (error) {
+    console.error('Delete chat error:', error);
+    res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+  }
+};
+
+// Xóa group chat của chuyến đi (gọi khi hoàn thành chuyến)
+exports.deleteTripGroupChat = async (req, res) => {
+  try {
+    const { tripId } = req.params;
+
+    const result = await Chat.updateMany(
+      { tripId, isGroup: true },
+      { $set: { isActive: false, updatedAt: new Date() } }
+    );
+
+    console.log(`✅ Deleted ${result.modifiedCount} group chat(s) for trip ${tripId}`);
+    res.json({ success: true, message: `Đã xóa ${result.modifiedCount} nhóm chat của chuyến`, count: result.modifiedCount });
+  } catch (error) {
+    console.error('Delete trip group chat error:', error);
+    res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+  }
+};
