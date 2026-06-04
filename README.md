@@ -118,9 +118,9 @@ Hệ thống đã có sẵn các dữ liệu giả lập để bạn có thể t
 
 | Vai trò | Tên hiển thị | Số điện thoại (Tài khoản) | Mật khẩu |
 | :--- | :--- | :--- | :--- |
-| **Admin** | Admin Garage Booking | `0123456789` | `123456` |
-| **User** | Nguyễn Văn A | `0987654321` | `123456` |
-| **Driver** | Trần Văn Tài | `0111222333` | `123456` |
+| **Admin** | Admin Garage Booking | `1` | `1` |
+| **User** | Nguyễn Văn A | `01234567890` | `1234567890` |
+| **Driver** | Trần Văn Tài | `0585761955` | `1` |
 
 ---
 
