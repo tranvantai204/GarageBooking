@@ -1,9 +1,9 @@
 <div align="center">
   <img src="https://img.icons8.com/clouds/200/bus.png" alt="Bus Icon" width="120" />
 
-  # 🚍 Hà Phương Bus App - Backend API
+  # 🚍 Garage Booking App - Backend API
   
-  **Hệ thống API RESTful cung cấp dữ liệu cho Ứng dụng Đặt vé xe khách Hà Phương.**
+  **Hệ thống API RESTful cung cấp dữ liệu cho Ứng dụng Đặt vé xe khách Garage Booking.**
 
   [![Node.js](https://img.shields.io/badge/Node.js-18.x-green.svg?style=for-the-badge&logo=node.js)](https://nodejs.org/)
   [![Express.js](https://img.shields.io/badge/Express.js-4.18-lightgrey.svg?style=for-the-badge&logo=express)](https://expressjs.com/)
@@ -14,7 +14,7 @@
 
 ## 🌟 Giới thiệu
 
-Đây là Backend Server cung cấp API cho ứng dụng **Hà Phương Bus** (Garage Booking). Hệ thống được xây dựng bằng **Node.js** và **Express.js**, hiện tại sử dụng kiến trúc dữ liệu trong bộ nhớ (In-memory) phù hợp cho việc demo, thử nghiệm và phát triển giao diện nhanh chóng. Hệ thống bao gồm đầy đủ các tính năng cơ bản như Xác thực người dùng, Quản lý chuyến đi, Đặt vé, và Hệ thống Chat nội bộ.
+Đây là Backend Server cung cấp API cho ứng dụng **Garage Booking**. Hệ thống được xây dựng bằng **Node.js** và **Express.js**, hiện tại sử dụng kiến trúc dữ liệu trong bộ nhớ (In-memory) phù hợp cho việc demo, thử nghiệm và phát triển giao diện nhanh chóng. Hệ thống bao gồm đầy đủ các tính năng cơ bản như Xác thực người dùng, Quản lý chuyến đi, Đặt vé, và Hệ thống Chat nội bộ.
 
 ---
 
@@ -118,7 +118,7 @@ Hệ thống đã có sẵn các dữ liệu giả lập để bạn có thể t
 
 | Vai trò | Tên hiển thị | Số điện thoại (Tài khoản) | Mật khẩu |
 | :--- | :--- | :--- | :--- |
-| **Admin** | Admin Hà Phương | `0123456789` | `123456` |
+| **Admin** | Admin Garage Booking | `0123456789` | `123456` |
 | **User** | Nguyễn Văn A | `0987654321` | `123456` |
 | **Driver** | Trần Văn Tài | `0111222333` | `123456` |
 
