@@ -24,7 +24,7 @@
 - 🚌 **Quản lý Chuyến xe**: Danh sách chuyến đi, tìm kiếm chuyến xe linh hoạt theo điểm đi, điểm đến và ngày khởi hành.
 - 🎟️ **Quản lý Đặt vé (Booking)**: Đặt vé, hủy vé, và xem danh sách vé đã đặt.
 - 💬 **Hệ thống Chat**: Hỗ trợ phòng chat, nhắn tin thời gian thực giả lập giữa các người dùng (Tài xế & Hành khách, Admin & Khách hàng), cho phép thu hồi tin nhắn.
-
+- **QR code Check-in**: Hỗ trợ tài xế checkin khách hàng nhanh chóng và chính xác tránh sai sót và dễ dàng quản lý
 ---
 
 ## 🛠️ Công nghệ sử dụng (Tech Stack)
